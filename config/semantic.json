@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "judgeVersion": "semantic-judge-v1",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "candidate": {
+    "minTitleSimilarity": 0.3,
+    "minTokenOverlap": 0.25,
+    "minSharedProperNouns": 2,
+    "maxCandidatesPerItem": 5,
+    "maxTotalCandidates": 200,
+    "maxPublishedHoursApart": 168,
+    "nGramSize": 3,
+    "minTitleLength": 8
+  },
+  "openai": {
+    "timeoutMs": 30000,
+    "maxRetries": 1
+  }
+}

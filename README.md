@@ -7,9 +7,10 @@
 - X News Feed（公開 JSON）
 - Webニュースの **RSS / Atom**（設定ファイルの公開Feed）
 - Unified News Pool（normalized source の merge）
-- News Clusters（説明可能な relationship / cluster。item は削除しない）
+- News Clusters（deterministic。説明可能な relationship / cluster。item は削除しない）
+- Semantic Clusters（candidate pair だけを AI 判定。deterministic cluster は上書きしない）
 
-Web検索、News API、本文スクレイピング、AI評価、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。LLM / embedding は使いません。
+Web検索、News API、本文スクレイピング、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
 
 ## 責務の境界
 
@@ -18,7 +19,7 @@ Web検索、News API、本文スクレイピング、AI評価、source横断の�
 | [x-timeline-collector](https://github.com/mook-hary/x-timeline-collector) | X取得、Daily Scope、Analyze、AI Analyze / Enrich、Public News Feed の公開 |
 | **timeline-digest** | 公開Feedの取得、検証、内部共通schemaへの変換、将来の複数source統合 |
 
-このリポジトリは x-timeline-collector の内部ファイル（Chrome profile、cookie、`timeline.json`、`daily-enriched.json` など）を参照しません。X は公開 `news-feed.json` だけを読みます。Web は `config/web-sources.json` に書いた公開 RSS/Atom URL だけを読みます。ユーザー入力URLをそのまま fetch する汎用HTTP proxyにはしません。OpenAI API も使いません。
+このリポジトリは x-timeline-collector の内部ファイル（Chrome profile、cookie、`timeline.json`、`daily-enriched.json` など）を参照しません。X は公開 `news-feed.json` だけを読みます。Web は `config/web-sources.json` に書いた公開 RSS/Atom URL だけを読みます。ユーザー入力URLをそのまま fetch する汎用HTTP proxyにはしません。OpenAI API は Semantic 層の任意実行（`--apply-ai`）だけに使い、キーは環境変数 `OPENAI_API_KEY` のみです。Semantic CLI はリポジトリ root の `.env` を dotenv で読みます（既に設定済みの環境変数は上書きしません）。リポジトリへキーは保存しません。
 
 ## 入力
 
@@ -135,6 +136,7 @@ npm run cluster
 - cluster は same-url / 十分な長さの same-title / 高 similarity の connected component。similarity しきい値が高いため、transitive merge はほぼ同一タイトルの連鎖に限られる
 - cluster ID は `cluster:<sha256(sorted itemIds)>`。入力順では変わらない
 - 出力: `data/processed/news-clusters.json` と、multi-item 確認用 `data/processed/news-clusters-review.json`
+- Semantic 層はこのファイルを上書きしない。別 output を使う
 
 成功表示例:
 
@@ -153,6 +155,142 @@ same-title: 1
 title-similarity: 3
 ```
 
+### Semantic Clusters
+
+設定: `config/semantic.json`
+
+AI に全 item を自由分類させません。ローカルの candidate generation が作った pair だけを判定します。deterministic cluster（`news-clusters.json`）は独立 layer として残し、上書きしません。
+
+```bash
+# どちらも AI なし（デフォルトは dry-run）
+npm run semantic
+npm run semantic -- --dry-run
+
+# 実 AI。--limit は今回の新規 request 上限（cache hit は数えない）
+npm run semantic -- --apply-ai --limit 1
+npm run semantic -- --apply-ai --limit 10
+npm run semantic -- --apply-ai
+```
+
+`--dry-run` と `--apply-ai` が両方ある場合は dry-run が勝ちます。確認のつもりで CLI を叩いても API は呼びません。`--limit 0` / `--limit -1` / `--limit abc` は明示 error です。
+
+#### 目的
+
+Unified News Pool → cheap deterministic candidate generation → semantic judge → semantic relationships → semantic clusters。
+
+#### AI の責務
+
+2つの News Item の関係分類だけです。
+
+| relationship | 意味 | cluster |
+| --- | --- | --- |
+| `same-event` | 同じ具体的出来事・発表・事故・決定などを別 source が報じている | **strong edge**。membership を結合する |
+| `related-event` | 同一テーマ / 出来事系列だが、同じ具体的ニュースではない | relationship として保存する。**結合しない** |
+| `different-event` | 人物・企業・単語が共通していても別の具体的ニュース | 診断 / cache 用に保存してよい。**結合しない** |
+
+`same-event` は厳しく判定します。人物 / 企業 / テーマ一致だけでは `same-event` にしません。不明なら `different-event` 寄りです（precision 優先）。
+
+A same-event B かつ B related-event C でも、A/B/C 全部が同じ cluster にはなりません。
+
+#### Candidate generation
+
+全 pair は送りません（例: 96 items → 4560 pairs）。AI 前にローカルで候補を絞ります。
+
+候補信号:
+
+- title 3-gram Dice
+- normalized title token overlap（日本語は CJK bigram も含む）
+- proper noun / capitalized phrase / カタカナ連続
+- URL hostname
+- publication time distance
+- category
+- provider の違い
+
+候補になっただけでは relationship 確定ではありません。しきい値は `config/semantic.json` の `candidate` です。初期値の例:
+
+- `minTitleSimilarity`: 0.3（deterministic cluster の 0.9 より広い）
+- `minTokenOverlap`: 0.25（かつ proper noun 共有 1 以上）
+- `minSharedProperNouns`: 2
+- `maxCandidatesPerItem`: 5
+- `maxTotalCandidates`: 200
+- `maxPublishedHoursApart`: 168（両方に timestamp がある場合のみ。null は落とさない）
+
+候補スコア（`candidateScore`）は「同一 / 関連 event である可能性」の優先度だけです。editorial / importance ではありません。
+
+#### Cost guard
+
+- `maxTotalCandidates` で候補数を上限する
+- デフォルト CLI は AI なし
+- 実実行は `--apply-ai` のみ
+- OpenAI は Chat Completions ではなく Responses API（`responses.create`）。`instructions` + `input` と `text.format.json_schema`。`temperature` は送らない
+- `--limit N` は今回新しく AI へ送る最大 request 数。cache hit は含めない
+- limit 外の candidate は `status: unjudged`。`different-event` にはしない。same-event merge にも使わない
+- 同じ pair は cache を再利用する
+
+dry-run 出力例:
+
+```
+News Semantic dry-run:
+
+items: 96
+candidates: N
+cache hits: 0
+estimated AI requests: N
+
+Top candidates:
+1. score=... dice=... time=...
+   the-verge | ...
+   bbc-world | ...
+```
+
+#### Cache
+
+`data/cache/semantic-judgments.json`
+
+key は決定論的です。sorted item IDs、title/summary 等の content hash、model、judgeVersion を含めます。item 内容や model / judgeVersion が変わると miss します。API key は保存しません。write は atomic です。ok 判定だけ cache し、failure は再試行できます。
+
+#### Failure policy
+
+- pair 単位 failure: `status: failed`。relationship は確定しない。`error` は短い診断文字列、`errorDetail` は HTTP status / type / code / param / message。secret / Authorization / stack は保存しない
+- invalid enum / confidence / reason は failed。`same-event` 扱いしない
+- AI 失敗でも `news-clusters.json` は変更しない
+- semantic output は生成してよいが、failed pair は merge しない
+- `--apply-ai` で全 pair 失敗: exit `1`
+- 一部失敗: exit `2`
+- dry-run / 全成功: exit `0`
+- news-pool 欠落、または `--apply-ai` で `OPENAI_API_KEY` なし: exit `1`
+
+#### Conflict detection
+
+`same-event` の connected component 内に明示的な `different-event` がある場合、silent にはしません。diagnostic conflict を記録し、その merge は保留します。
+
+#### Input / output
+
+| path | 内容 |
+| --- | --- |
+| `config/semantic.json` | model / judgeVersion / candidate caps |
+| `data/normalized/news-pool.json` | 入力 |
+| `data/processed/news-semantic-candidates.json` | dry-run の候補 |
+| `data/processed/news-semantic.json` | `--apply-ai` の judgments / clusters |
+| `data/cache/semantic-judgments.json` | 判定 cache |
+
+AI へ送るのは title / summary（短い clip）/ category / provider / publishedAt / hostname 程度です。本文全文は送りません。
+
+#### OPENAI_API_KEY
+
+- repo へ保存しない
+- `.env` は commit しない（`.gitignore`）
+- テンプレは `.env.example`（`cp .env.example .env`）
+- Semantic CLI（`npm run semantic`）起動時に root `.env` を dotenv で `process.env` へ載せる。既にシェル / CI で入っている値は上書きしない
+- キー自体は従来どおり `process.env.OPENAI_API_KEY` から取得する
+- log しない
+- News Feed content 以外の秘密情報は送らない
+- 実 AI の前に必ず dry-run して候補数を確認する
+
+model 解決順（変更なし）: `SEMANTIC_MODEL` → `OPENAI_MODEL` → `config/semantic.json` の `model`。コードへ散在させません。config の値は fallback / default です。
+
+`OPENAI_MODEL` は x-timeline-collector と同じ変数名です。`SEMANTIC_MODEL` が未設定なら、クローラー側 `.env` と同じ `OPENAI_MODEL` でも semantic の model を指定できます。`.env.example` では `SEMANTIC_MODEL=gpt-5-mini` を推奨しています。
+
 ## failure policy
 
 | 対象 | 失敗時 |
@@ -163,6 +301,8 @@ title-similarity: 3
 | Web の全 source 失敗 | normalized を成功として書かない。exit `1` |
 | Unify | required input 欠落、schema 不正、item.id 衝突で exit `1`。壊れた pool JSON は書かない |
 | Cluster | news-pool 欠落、schema 不正、所属 invariant 違反で exit `1`。壊れた cluster JSON は書かない |
+| Semantic dry-run | news-pool 欠落で exit `1`。AI は呼ばない。候補 JSON は atomic write |
+| Semantic `--apply-ai` | `OPENAI_API_KEY` なし / pool 欠落 / 不正な `--limit` で exit `1`。全 pair 失敗も exit `1`。一部失敗は exit `2`。`news-clusters.json` は触らない |
 
 Web の exit `2` は partial failure です。CI で「1件でも失敗したら落とす」なら非0を失敗にしてください。silent ignore はしません。
 
@@ -177,6 +317,9 @@ Web の exit `2` は partial failure です。CI で「1件でも失敗したら
 | `data/normalized/news-pool.json` | X + Web などを束ねた Unified News Pool |
 | `data/processed/news-clusters.json` | relationship / cluster（item は削除しない） |
 | `data/processed/news-clusters-review.json` | multi-item cluster の確認用 |
+| `data/processed/news-semantic-candidates.json` | Semantic dry-run の候補 |
+| `data/processed/news-semantic.json` | Semantic judgments / clusters |
+| `data/cache/semantic-judgments.json` | Semantic judge cache（API key は含まない） |
 
 いずれも `.tmp` → rename の atomic write です。
 
@@ -223,6 +366,21 @@ Cluster:
 - cluster ID は決定論的
 - news-pool 欠落は fail
 
+Semantic（実 API は使わない。mock judge）:
+
+- 類似 pair を candidate にする / 無関係 pair はしない
+- `maxCandidatesPerItem` / `maxTotalCandidates`
+- 候補順は決定論的
+- mock same-event は cluster 結合、related / different は結合しない
+- invalid enum / AI failure は failed、merge しない
+- cache hit では judge を呼ばない。content / model / judgeVersion 変更は miss
+- same-event の transitive cluster と different-event conflict
+- 全 item がちょうど1 semantic cluster
+- dry-run の judge 呼び出しは 0
+- `--limit` は新規 request 上限。cache hit は数えない。limit 外は unjudged
+- 不正な `--limit` は fail
+- cache / output は atomic write
+
 ## 将来
 
 `src/sources/` に source adapter を足し、最終的には同じ Normalized News Item へ変換します。
@@ -234,4 +392,4 @@ src/sources/web-news.js     # 未実装（検索・API等）
 src/sources/astronomy.js    # 未実装
 ```
 
-Unify の次は Cluster（関係の記録）まで実装済みです。semantic dedupe、編集判断、Timeline Digest 生成はまだです。
+Unify / deterministic Cluster / Semantic（candidate pair の関係分類）まで実装済みです。representative 選択、editorial ranking、Timeline Digest 生成はまだです。

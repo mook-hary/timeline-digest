@@ -20,3 +20,12 @@ export class FetchError extends IngestError {
     if (options.status != null) this.status = options.status;
   }
 }
+
+export class AiError extends IngestError {
+  constructor(message, options = {}) {
+    super(message, { ...options, code: options.code || "AI" });
+    this.name = "AiError";
+    if (options.diagnostic) this.diagnostic = options.diagnostic;
+    if (options.status != null) this.status = options.status;
+  }
+}

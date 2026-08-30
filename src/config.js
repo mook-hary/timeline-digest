@@ -68,4 +68,31 @@ export const NEWS_CLUSTERS_REVIEW_PATH = path.join(
   "news-clusters-review.json"
 );
 
+export const SEMANTIC_CONFIG_PATH = path.join(
+  ROOT_DIR,
+  "config",
+  "semantic.json"
+);
+
+export const NEWS_SEMANTIC_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-semantic.json"
+);
+
+export const NEWS_SEMANTIC_CANDIDATES_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-semantic-candidates.json"
+);
+
+export const SEMANTIC_CACHE_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "cache",
+  "semantic-judgments.json"
+);
+
 export { ROOT_DIR };

@@ -1,5 +1,6 @@
 node_modules/
 .DS_Store
+.env
 *.tmp
 data/raw/*.json
 data/raw/web/*
@@ -7,3 +8,5 @@ data/raw/web/*
 data/normalized/*.json
 data/processed/*
 !data/processed/.gitkeep
+data/cache/*
+!data/cache/.gitkeep

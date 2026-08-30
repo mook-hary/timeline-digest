@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Multi-source ingest and digest layer. Consumes public feeds; does not scrape X or call AI.",
+  "description": "Multi-source ingest and digest layer. Consumes public feeds; optional OpenAI judge on candidate pairs only.",
   "engines": {
     "node": ">=20"
   },
@@ -12,9 +12,12 @@
     "ingest:web": "node src/ingest-web.js",
     "unify": "node src/unify.js",
     "cluster": "node src/cluster.js",
+    "semantic": "node src/semantic.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.11.1"
+    "dotenv": "^17.4.2",
+    "fast-xml-parser": "^5.11.1",
+    "openai": "^6.49.0"
   }
 }
