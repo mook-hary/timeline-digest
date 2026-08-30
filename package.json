@@ -11,6 +11,7 @@
     "ingest:x": "node src/ingest-x.js",
     "ingest:web": "node src/ingest-web.js",
     "unify": "node src/unify.js",
+    "cluster": "node src/cluster.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

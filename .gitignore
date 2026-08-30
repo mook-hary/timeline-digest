@@ -5,3 +5,5 @@ data/raw/*.json
 data/raw/web/*
 !data/raw/web/.gitkeep
 data/normalized/*.json
+data/processed/*
+!data/processed/.gitkeep

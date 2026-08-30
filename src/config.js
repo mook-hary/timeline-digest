@@ -48,4 +48,24 @@ export const NEWS_POOL_PATH = path.join(
   "news-pool.json"
 );
 
+export const CLUSTER_CONFIG_PATH = path.join(
+  ROOT_DIR,
+  "config",
+  "cluster.json"
+);
+
+export const NEWS_CLUSTERS_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-clusters.json"
+);
+
+export const NEWS_CLUSTERS_REVIEW_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-clusters-review.json"
+);
+
 export { ROOT_DIR };

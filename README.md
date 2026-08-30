@@ -7,8 +7,9 @@
 - X News Feed（公開 JSON）
 - Webニュースの **RSS / Atom**（設定ファイルの公開Feed）
 - Unified News Pool（normalized source の merge）
+- News Clusters（説明可能な relationship / cluster。item は削除しない）
 
-Web検索、News API、本文スクレイピング、AI評価、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。
+Web検索、News API、本文スクレイピング、AI評価、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。LLM / embedding は使いません。
 
 ## 責務の境界
 
@@ -114,6 +115,44 @@ bbc-world: 36
 
 将来 `astronomy-news.json` などを足す場合は、unify コードへ source 固有分岐を増やさず `config/unify-inputs.json` に descriptor を追加します。
 
+### News Clusters
+
+設定: `config/cluster.json`
+
+```bash
+npm run cluster
+```
+
+`data/normalized/news-pool.json` を読み、item を削除せず relationship / cluster を `data/processed/` へ書きます。news-pool が無ければ fail します。上流の ingest / unify は自動実行しません。
+
+- **dedupe ではない。** 全 item が必ずどれか一つの cluster に所属する（関係が無ければ singleton）
+- 比較用に URL / title を normalize するが、元の `source.url` / `title` は書き換えない
+- URL: hostname 小文字、default port 除去、fragment 除去、trailing slash、既知の tracking query（`utm_*`, `fbclid`, `gclid` 等）のみ除去。未知の query は残す。parse 不能なら same-url に使わない
+- X の `source.url` は投稿 URL として扱う。本文から外部記事 URL は抽出しない
+- title: Unicode NFKC、lowercase、空白畳み、句読点除去。日本語の文字は残す。空/null は title 判定対象外
+- similarity は文字 3-gram の Dice 係数。しきい値は `config/cluster.json` の `title.similarityThreshold`（初期 0.9）。短い title は対象外。**precision 優先**（別事件の誤結合を避ける。取りこぼしは許容）
+- relationship の `confidence` は AI 確率ではなく、rule の強さ（same-url=1.0、same-title=0.98、title-similarity=Dice そのもの）
+- cluster は same-url / 十分な長さの same-title / 高 similarity の connected component。similarity しきい値が高いため、transitive merge はほぼ同一タイトルの連鎖に限られる
+- cluster ID は `cluster:<sha256(sorted itemIds)>`。入力順では変わらない
+- 出力: `data/processed/news-clusters.json` と、multi-item 確認用 `data/processed/news-clusters-review.json`
+
+成功表示例:
+
+```
+News Clusters:
+
+items: 96
+clusters: 91
+multi-item: 4
+singletons: 87
+relationships: 6
+
+Relationship:
+same-url: 2
+same-title: 1
+title-similarity: 3
+```
+
 ## failure policy
 
 | 対象 | 失敗時 |
@@ -123,6 +162,7 @@ bbc-world: 36
 | Web の一部 source 失敗 | 成功した source は保存する。失敗は表示する。exit `2` |
 | Web の全 source 失敗 | normalized を成功として書かない。exit `1` |
 | Unify | required input 欠落、schema 不正、item.id 衝突で exit `1`。壊れた pool JSON は書かない |
+| Cluster | news-pool 欠落、schema 不正、所属 invariant 違反で exit `1`。壊れた cluster JSON は書かない |
 
 Web の exit `2` は partial failure です。CI で「1件でも失敗したら落とす」なら非0を失敗にしてください。silent ignore はしません。
 
@@ -135,6 +175,8 @@ Web の exit `2` は partial failure です。CI で「1件でも失敗したら
 | `data/raw/web/<source-id>.xml` | 取得した RSS/Atom XML |
 | `data/normalized/web-news.json` | Web の内部共通schema |
 | `data/normalized/news-pool.json` | X + Web などを束ねた Unified News Pool |
+| `data/processed/news-clusters.json` | relationship / cluster（item は削除しない） |
+| `data/processed/news-clusters-review.json` | multi-item cluster の確認用 |
 
 いずれも `.tmp` → rename の atomic write です。
 
@@ -172,6 +214,15 @@ Unify:
 - stats は items から算出
 - 並び順は決定論的
 
+Cluster:
+
+- item 削除なし、全 item がちょうど1 cluster
+- same-url / same-title / 高 title similarity
+- tracking query 差は same-url、意味のある query 差は別
+- 似ているが別事件は関係付けない
+- cluster ID は決定論的
+- news-pool 欠落は fail
+
 ## 将来
 
 `src/sources/` に source adapter を足し、最終的には同じ Normalized News Item へ変換します。
@@ -183,4 +234,4 @@ src/sources/web-news.js     # 未実装（検索・API等）
 src/sources/astronomy.js    # 未実装
 ```
 
-Unify の次に、共通schema上での重複整理、編集判断、Timeline Digest 生成を載せる予定です。
+Unify の次は Cluster（関係の記録）まで実装済みです。semantic dedupe、編集判断、Timeline Digest 生成はまだです。

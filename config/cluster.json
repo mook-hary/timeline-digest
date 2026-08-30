@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "url": {
+    "trackingParams": [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "utm_id",
+      "fbclid",
+      "gclid",
+      "gclsrc",
+      "dclid",
+      "msclkid",
+      "mc_cid",
+      "mc_eid",
+      "igshid"
+    ]
+  },
+  "title": {
+    "nGramSize": 3,
+    "similarityThreshold": 0.9,
+    "minLength": 12,
+    "sameTitleMinLength": 8
+  },
+  "confidence": {
+    "sameUrl": 1,
+    "sameTitle": 0.98
+  }
+}
