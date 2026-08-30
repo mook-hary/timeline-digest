@@ -1,0 +1,14 @@
+{
+  "name": "timeline-digest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-source ingest and digest layer. Consumes public feeds; does not scrape X or call AI.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ingest:x": "node src/ingest-x.js",
+    "test": "node --test test/*.test.js"
+  }
+}

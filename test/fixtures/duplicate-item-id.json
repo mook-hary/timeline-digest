@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "source": "x-timeline-collector",
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "scope": {
+    "type": "collect-run",
+    "itemCount": 2
+  },
+  "items": [
+    {
+      "id": "123",
+      "title": "First duplicate id",
+      "summary": "Same id, different URL",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://example.com/news-a",
+      "postedAt": "2026-08-30T01:00:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author A", "handle": "@usera" },
+      "scores": {
+        "informationValue": 4,
+        "personalRelevance": 3,
+        "impact": 2,
+        "attentionSignal": 1,
+        "importance": 3
+      }
+    },
+    {
+      "id": "123",
+      "title": "Second duplicate id",
+      "summary": "Same id, different URL",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://example.com/news-b",
+      "postedAt": "2026-08-30T01:10:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author B", "handle": "@userb" },
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 4,
+        "impact": 3,
+        "attentionSignal": 2,
+        "importance": 4
+      }
+    }
+  ]
+}

@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "source": "x-timeline-collector",
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "scope": {
+    "type": "collect-run",
+    "itemCount": 10
+  },
+  "items": [
+    {
+      "id": "1001",
+      "title": "Title 1",
+      "summary": "Summary 1",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user1/status/1001",
+      "postedAt": "2026-08-30T01:00:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 1", "handle": "@user1" },
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 4,
+        "impact": 3,
+        "attentionSignal": 2,
+        "importance": 4
+      }
+    },
+    {
+      "id": "1002",
+      "title": "Title 2",
+      "summary": "Summary 2",
+      "category": "ニュース・報道",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user2/status/1002",
+      "postedAt": "2026-08-30T01:10:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 2", "handle": "@user2" },
+      "scores": {
+        "informationValue": 4,
+        "personalRelevance": 3,
+        "impact": 4,
+        "attentionSignal": 3,
+        "importance": 4
+      }
+    },
+    {
+      "id": "1003",
+      "title": "Title 3",
+      "summary": "Summary 3",
+      "category": "政治・社会",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user3/status/1003",
+      "postedAt": "2026-08-30T01:20:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 3", "handle": "@user3" },
+      "scores": {
+        "informationValue": 3,
+        "personalRelevance": 5,
+        "impact": 2,
+        "attentionSignal": 1,
+        "importance": 3
+      }
+    },
+    {
+      "id": "1004",
+      "title": "Title 4",
+      "summary": "Summary 4",
+      "category": "科学・テクノロジー",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user4/status/1004",
+      "postedAt": "2026-08-30T01:30:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 4", "handle": "@user4" },
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 5,
+        "impact": 5,
+        "attentionSignal": 4,
+        "importance": 5
+      }
+    },
+    {
+      "id": "1005",
+      "title": "Title 5",
+      "summary": "Summary 5",
+      "category": "天文",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user5/status/1005",
+      "postedAt": "2026-08-30T01:40:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 5", "handle": "@user5" },
+      "scores": {
+        "informationValue": 2,
+        "personalRelevance": 2,
+        "impact": 2,
+        "attentionSignal": 2,
+        "importance": 2
+      }
+    },
+    {
+      "id": "1006",
+      "title": "Title 6",
+      "summary": "Summary 6",
+      "category": "エンタメ・イベント",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user6/status/1006",
+      "postedAt": "2026-08-30T01:50:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 6", "handle": "@user6" },
+      "scores": {
+        "informationValue": 1,
+        "personalRelevance": 1,
+        "impact": 1,
+        "attentionSignal": 1,
+        "importance": 1
+      }
+    },
+    {
+      "id": "1007",
+      "title": "Title 7",
+      "summary": "Summary 7",
+      "category": "生活・健康",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user7/status/1007",
+      "postedAt": "2026-08-30T02:00:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 7", "handle": "@user7" },
+      "scores": {
+        "informationValue": 4,
+        "personalRelevance": 2,
+        "impact": 3,
+        "attentionSignal": 5,
+        "importance": 3
+      }
+    },
+    {
+      "id": "1008",
+      "title": "Title 8",
+      "summary": "Summary 8",
+      "category": "アニメ・漫画",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user8/status/1008",
+      "postedAt": "2026-08-30T02:10:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 8", "handle": "@user8" },
+      "scores": {
+        "informationValue": 3,
+        "personalRelevance": 3,
+        "impact": 3,
+        "attentionSignal": 3,
+        "importance": 3
+      }
+    },
+    {
+      "id": "1009",
+      "title": "Title 9",
+      "summary": "Summary 9",
+      "category": "合気道・武道",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user9/status/1009",
+      "postedAt": "2026-08-30T02:20:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 9", "handle": "@user9" },
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 4,
+        "impact": 2,
+        "attentionSignal": 4,
+        "importance": 4
+      }
+    },
+    {
+      "id": "1010",
+      "title": "Title 10",
+      "summary": "Summary 10",
+      "category": "その他",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user10/status/1010",
+      "postedAt": "2026-08-30T02:30:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author 10", "handle": "@user10" },
+      "scores": {
+        "informationValue": 2,
+        "personalRelevance": 4,
+        "impact": 1,
+        "attentionSignal": 5,
+        "importance": 2
+      }
+    }
+  ]
+}

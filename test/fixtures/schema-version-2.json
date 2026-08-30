@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "source": "x-timeline-collector",
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "scope": {
+    "type": "collect-run",
+    "itemCount": 1
+  },
+  "items": [
+    {
+      "id": "2001",
+      "title": "Unsupported schema",
+      "summary": "Should fail",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/user/status/2001",
+      "postedAt": "2026-08-30T01:00:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author", "handle": "@user" },
+      "scores": {
+        "informationValue": 1,
+        "personalRelevance": 1,
+        "impact": 1,
+        "attentionSignal": 1,
+        "importance": 1
+      }
+    }
+  ]
+}

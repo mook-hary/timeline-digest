@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "source": "x-timeline-collector",
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "scope": {
+    "type": "collect-run",
+    "itemCount": 2
+  },
+  "items": [
+    {
+      "id": "7001",
+      "title": "First item",
+      "summary": "Same URL, first id",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/shared/status/7000",
+      "postedAt": "2026-08-30T01:00:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author A", "handle": "@usera" },
+      "scores": {
+        "informationValue": 4,
+        "personalRelevance": 3,
+        "impact": 2,
+        "attentionSignal": 1,
+        "importance": 3
+      }
+    },
+    {
+      "id": "7002",
+      "title": "Second item",
+      "summary": "Same URL, second id",
+      "category": "AI",
+      "sourceType": "x",
+      "sourceUrl": "https://x.com/shared/status/7000",
+      "postedAt": "2026-08-30T01:10:00.000Z",
+      "collectedAt": "2026-08-30T03:00:00.000Z",
+      "author": { "name": "Author B", "handle": "@userb" },
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 4,
+        "impact": 3,
+        "attentionSignal": 2,
+        "importance": 4
+      }
+    }
+  ]
+}

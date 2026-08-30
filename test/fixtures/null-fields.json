@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "source": "x-timeline-collector",
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "scope": {
+    "type": "collect-run",
+    "itemCount": 1
+  },
+  "items": [
+    {
+      "id": "5001",
+      "title": null,
+      "summary": null,
+      "category": null,
+      "sourceType": null,
+      "sourceUrl": null,
+      "postedAt": null,
+      "collectedAt": null,
+      "author": {
+        "name": null,
+        "handle": null
+      },
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    }
+  ]
+}
