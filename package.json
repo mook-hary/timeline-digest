@@ -9,6 +9,10 @@
   },
   "scripts": {
     "ingest:x": "node src/ingest-x.js",
+    "ingest:web": "node src/ingest-web.js",
     "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.1"
   }
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example News</title>
+    <link>https://example.com/</link>
+    <lastBuildDate>Mon, 01 Jan 2024 12:00:00 GMT</lastBuildDate>
+    <item>
+      <title>First article</title>
+      <link>https://example.com/a1</link>
+      <guid isPermaLink="false">urn:example:a1</guid>
+      <description><![CDATA[<p>Hello <b>world</b> &amp; friends</p>]]></description>
+      <pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>
+      <category>Science</category>
+    </item>
+    <item>
+      <title>Second article</title>
+      <link>https://example.com/a2</link>
+      <guid>urn:example:a2</guid>
+      <description>Plain summary</description>
+      <pubDate>Mon, 01 Jan 2024 11:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

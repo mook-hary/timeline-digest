@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Atom</title>
+  <updated>2024-01-01T12:00:00Z</updated>
+  <entry>
+    <title>Atom one</title>
+    <id>urn:atom:1</id>
+    <link rel="alternate" href="https://example.com/atom-1" />
+    <published>2024-01-01T09:00:00Z</published>
+    <summary type="html">&lt;p&gt;Atom summary&lt;/p&gt;</summary>
+    <category term="Tech" />
+    <author>
+      <name>Jane Doe</name>
+    </author>
+  </entry>
+  <entry>
+    <title>Atom two</title>
+    <id>urn:atom:2</id>
+    <link href="https://example.com/atom-2" />
+    <updated>2024-01-01T09:30:00Z</updated>
+    <content type="html"><![CDATA[<p>Fuller <em>content</em></p>]]></content>
+  </entry>
+</feed>

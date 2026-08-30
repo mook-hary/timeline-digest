@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Duplicate GUID Feed</title>
+    <item>
+      <title>First duplicate</title>
+      <link>https://example.com/dup-a</link>
+      <guid>urn:example:dup</guid>
+      <description>Same guid, first URL</description>
+      <pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Second duplicate</title>
+      <link>https://example.com/dup-b</link>
+      <guid>urn:example:dup</guid>
+      <description>Same guid, second URL</description>
+      <pubDate>Mon, 01 Jan 2024 11:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

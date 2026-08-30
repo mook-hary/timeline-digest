@@ -2,4 +2,6 @@ node_modules/
 .DS_Store
 *.tmp
 data/raw/*.json
+data/raw/web/*
+!data/raw/web/.gitkeep
 data/normalized/*.json

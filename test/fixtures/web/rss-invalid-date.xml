@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Invalid Date Feed</title>
+    <item>
+      <title>Bad date</title>
+      <link>https://example.com/bad-date</link>
+      <guid>urn:example:bad-date</guid>
+      <description>Has an unparseable pubDate</description>
+      <pubDate>not-a-date</pubDate>
+    </item>
+  </channel>
+</rss>

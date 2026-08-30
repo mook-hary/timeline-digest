@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>No GUID Feed</title>
+    <item>
+      <title>URL identity</title>
+      <link>https://example.com/no-guid</link>
+      <description>Identified by URL</description>
+      <pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

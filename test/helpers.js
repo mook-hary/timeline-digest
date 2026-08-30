@@ -30,6 +30,24 @@ export function mockFetchJson(body, { status = 200 } = {}) {
     });
 }
 
+export function mockFetchByUrl(routes) {
+  return async (url) => {
+    const route = routes[url];
+    if (!route) {
+      return new Response(`missing mock ${url}`, { status: 404 });
+    }
+    if (route.throw) {
+      throw new Error(route.throw);
+    }
+    return new Response(route.body ?? "", {
+      status: route.status ?? 200,
+      headers: {
+        "Content-Type": route.contentType ?? "application/xml",
+      },
+    });
+  };
+}
+
 export function mockFetchNetworkError(message = "ECONNREFUSED") {
   return async () => {
     throw new Error(message);

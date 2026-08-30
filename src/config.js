@@ -20,4 +20,19 @@ export const NORMALIZED_X_PATH = path.join(
   "x-news.json"
 );
 
+export const WEB_SOURCES_PATH = path.join(
+  ROOT_DIR,
+  "config",
+  "web-sources.json"
+);
+
+export const RAW_WEB_DIR = path.join(ROOT_DIR, "data", "raw", "web");
+
+export const NORMALIZED_WEB_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "normalized",
+  "web-news.json"
+);
+
 export { ROOT_DIR };

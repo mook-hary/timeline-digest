@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "nhk-major",
+      "name": "NHK 主要ニュース",
+      "type": "rss",
+      "url": "https://news.web.nhk/n-data/conf/na/rss/cat0.xml",
+      "defaultCategory": "一般",
+      "enabled": true
+    },
+    {
+      "id": "bbc-world",
+      "name": "BBC World",
+      "type": "rss",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "defaultCategory": "国際",
+      "enabled": true
+    },
+    {
+      "id": "nasa-news",
+      "name": "NASA News",
+      "type": "rss",
+      "url": "https://www.nasa.gov/news-release/feed/",
+      "defaultCategory": "科学",
+      "enabled": true
+    },
+    {
+      "id": "the-verge",
+      "name": "The Verge",
+      "type": "atom",
+      "url": "https://www.theverge.com/rss/index.xml",
+      "defaultCategory": "Technology",
+      "enabled": true
+    }
+  ]
+}
