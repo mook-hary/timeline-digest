@@ -13,6 +13,7 @@
     "unify": "node src/unify.js",
     "cluster": "node src/cluster.js",
     "semantic": "node src/semantic.js",
+    "evaluate": "node src/evaluate.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

@@ -95,4 +95,17 @@ export const SEMANTIC_CACHE_PATH = path.join(
   "semantic-judgments.json"
 );
 
+export const EVALUATION_CONFIG_PATH = path.join(
+  ROOT_DIR,
+  "config",
+  "evaluation.json"
+);
+
+export const NEWS_EVALUATED_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-evaluated.json"
+);
+
 export { ROOT_DIR };

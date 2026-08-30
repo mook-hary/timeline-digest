@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "weights": {
+    "importance": 0.3,
+    "informationValue": 0.25,
+    "impact": 0.2,
+    "novelty": 0.15,
+    "personalRelevance": 0.1
+  }
+}
