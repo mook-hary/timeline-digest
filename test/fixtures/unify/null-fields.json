@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "sourceFeeds": [
+    {
+      "provider": "null-source",
+      "type": "web",
+      "url": null,
+      "sourceGeneratedAt": null,
+      "itemCount": 1
+    }
+  ],
+  "items": [
+    {
+      "id": "web:null-source:n1",
+      "source": {
+        "type": "web",
+        "provider": "null-source",
+        "url": null,
+        "originalId": "n1",
+        "author": { "name": null, "handle": null }
+      },
+      "title": null,
+      "summary": null,
+      "category": null,
+      "publishedAt": null,
+      "collectedAt": null,
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    }
+  ]
+}

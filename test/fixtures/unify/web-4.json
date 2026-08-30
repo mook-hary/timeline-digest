@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T12:30:00.000Z",
+  "sourceFeeds": [
+    {
+      "provider": "nhk-major",
+      "type": "web",
+      "url": "https://example.test/nhk.xml",
+      "sourceGeneratedAt": "2026-08-30T12:10:00.000Z",
+      "itemCount": 2,
+      "status": "ok"
+    },
+    {
+      "provider": "bbc-world",
+      "type": "web",
+      "url": "https://example.test/bbc.xml",
+      "sourceGeneratedAt": "2026-08-30T12:20:00.000Z",
+      "itemCount": 2,
+      "status": "ok"
+    }
+  ],
+  "items": [
+    {
+      "id": "web:nhk-major:n1",
+      "source": {
+        "type": "web",
+        "provider": "nhk-major",
+        "url": "https://example.com/shared",
+        "originalId": "n1",
+        "author": { "name": null, "handle": null }
+      },
+      "title": "NHK 1",
+      "summary": "NHK summary 1",
+      "category": "一般",
+      "publishedAt": "2024-01-03T12:00:00.000Z",
+      "collectedAt": "2024-01-03T13:00:00.000Z",
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    },
+    {
+      "id": "web:nhk-major:n2",
+      "source": {
+        "type": "web",
+        "provider": "nhk-major",
+        "url": "https://example.com/nhk-2",
+        "originalId": "n2",
+        "author": { "name": null, "handle": null }
+      },
+      "title": "NHK 2",
+      "summary": "NHK summary 2",
+      "category": "一般",
+      "publishedAt": "2024-01-01T00:00:00.000Z",
+      "collectedAt": "2024-01-01T01:00:00.000Z",
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    },
+    {
+      "id": "web:bbc-world:b1",
+      "source": {
+        "type": "web",
+        "provider": "bbc-world",
+        "url": "https://example.com/bbc-1",
+        "originalId": "b1",
+        "author": { "name": "BBC", "handle": null }
+      },
+      "title": "BBC 1",
+      "summary": "BBC summary 1",
+      "category": "国際",
+      "publishedAt": "2024-01-05T00:00:00.000Z",
+      "collectedAt": "2024-01-05T01:00:00.000Z",
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    },
+    {
+      "id": "web:bbc-world:b2",
+      "source": {
+        "type": "web",
+        "provider": "bbc-world",
+        "url": "https://example.com/bbc-2",
+        "originalId": "b2",
+        "author": { "name": "BBC", "handle": null }
+      },
+      "title": "BBC 2",
+      "summary": "BBC summary 2",
+      "category": "国際",
+      "publishedAt": "2024-01-01T12:00:00.000Z",
+      "collectedAt": "2024-01-01T13:00:00.000Z",
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    }
+  ]
+}

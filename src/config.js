@@ -35,4 +35,17 @@ export const NORMALIZED_WEB_PATH = path.join(
   "web-news.json"
 );
 
+export const UNIFY_INPUTS_PATH = path.join(
+  ROOT_DIR,
+  "config",
+  "unify-inputs.json"
+);
+
+export const NEWS_POOL_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "normalized",
+  "news-pool.json"
+);
+
 export { ROOT_DIR };

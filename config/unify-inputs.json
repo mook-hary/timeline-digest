@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "inputs": [
+    {
+      "id": "x",
+      "path": "data/normalized/x-news.json",
+      "required": true
+    },
+    {
+      "id": "web",
+      "path": "data/normalized/web-news.json",
+      "required": true
+    }
+  ]
+}

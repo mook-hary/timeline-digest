@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T12:00:00.000Z",
+  "sourceFeeds": [
+    {
+      "provider": "x-timeline-collector",
+      "type": "x",
+      "url": "https://example.test/x-news-feed.json",
+      "sourceGeneratedAt": "2026-08-30T11:00:00.000Z",
+      "itemCount": 3
+    }
+  ],
+  "items": [
+    {
+      "id": "x:x-timeline-collector:100",
+      "source": {
+        "type": "x",
+        "provider": "x-timeline-collector",
+        "url": "https://x.com/user/status/100",
+        "originalId": "100",
+        "author": { "name": "Author 100", "handle": "@u100" }
+      },
+      "title": "X 100",
+      "summary": "Summary 100",
+      "category": "AI",
+      "publishedAt": "2024-01-02T00:00:00.000Z",
+      "collectedAt": "2024-01-02T01:00:00.000Z",
+      "scores": {
+        "informationValue": 5,
+        "personalRelevance": 4,
+        "impact": 3,
+        "attentionSignal": 2,
+        "importance": 4
+      }
+    },
+    {
+      "id": "x:x-timeline-collector:200",
+      "source": {
+        "type": "x",
+        "provider": "x-timeline-collector",
+        "url": "https://example.com/shared",
+        "originalId": "200",
+        "author": { "name": "Author 200", "handle": "@u200" }
+      },
+      "title": "X 200",
+      "summary": "Summary 200",
+      "category": "国際",
+      "publishedAt": "2024-01-03T12:00:00.000Z",
+      "collectedAt": "2024-01-03T14:00:00.000Z",
+      "scores": {
+        "informationValue": 4,
+        "personalRelevance": 3,
+        "impact": 4,
+        "attentionSignal": 3,
+        "importance": 4
+      }
+    },
+    {
+      "id": "x:x-timeline-collector:300",
+      "source": {
+        "type": "x",
+        "provider": "x-timeline-collector",
+        "url": "https://x.com/user/status/300",
+        "originalId": "300",
+        "author": { "name": null, "handle": null }
+      },
+      "title": "X 300",
+      "summary": "Summary 300",
+      "category": "その他",
+      "publishedAt": null,
+      "collectedAt": "2024-01-04T00:00:00.000Z",
+      "scores": {
+        "informationValue": null,
+        "personalRelevance": null,
+        "impact": null,
+        "attentionSignal": null,
+        "importance": null
+      }
+    }
+  ]
+}
