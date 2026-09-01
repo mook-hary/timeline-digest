@@ -22,6 +22,20 @@ function requireNumber(value, label, { min, max } = {}) {
   return value;
 }
 
+function requireInteger(value, label, { min } = {}) {
+  if (!Number.isInteger(value)) {
+    throw new ValidationError(`${label} must be an integer`);
+  }
+  return requireNumber(value, label, { min });
+}
+
+function requireString(value, label) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ValidationError(`${label} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
 export function validateEvaluationConfig(data) {
   if (!isPlainObject(data)) {
     throw new ValidationError("Evaluation config must be an object");
@@ -33,6 +47,9 @@ export function validateEvaluationConfig(data) {
   }
   if (!isPlainObject(data.weights)) {
     throw new ValidationError("evaluation config weights must be an object");
+  }
+  if (!isPlainObject(data.openai)) {
+    throw new ValidationError("evaluation config openai must be an object");
   }
 
   const weights = {};
@@ -50,11 +67,38 @@ export function validateEvaluationConfig(data) {
 
   return {
     schemaVersion: 1,
+    evaluatorVersion: requireString(data.evaluatorVersion, "evaluatorVersion"),
+    provider: requireString(data.provider, "provider"),
+    model: requireString(data.model, "model"),
+    maxItemsPerCluster: requireInteger(
+      data.maxItemsPerCluster,
+      "maxItemsPerCluster",
+      { min: 1 }
+    ),
+    summaryClipChars: requireInteger(data.summaryClipChars, "summaryClipChars", {
+      min: 1,
+    }),
     weights,
+    openai: {
+      timeoutMs: requireInteger(data.openai.timeoutMs, "openai.timeoutMs", {
+        min: 1,
+      }),
+      maxRetries: requireInteger(data.openai.maxRetries, "openai.maxRetries", {
+        min: 0,
+      }),
+    },
   };
 }
 
-export async function loadEvaluationConfig(filePath) {
+export function resolveEvaluationModel(config, env = process.env) {
+  const evaluationModel = env.EVALUATION_MODEL && String(env.EVALUATION_MODEL).trim();
+  if (evaluationModel) return evaluationModel;
+  const openaiModel = env.OPENAI_MODEL && String(env.OPENAI_MODEL).trim();
+  if (openaiModel) return openaiModel;
+  return config.model;
+}
+
+export async function loadEvaluationConfig(filePath, env = process.env) {
   let text;
   try {
     text = await fs.readFile(filePath, "utf8");
@@ -74,7 +118,11 @@ export async function loadEvaluationConfig(filePath) {
     });
   }
 
-  return validateEvaluationConfig(data);
+  const config = validateEvaluationConfig(data);
+  return {
+    ...config,
+    model: resolveEvaluationModel(config, env),
+  };
 }
 
 export { DEFAULT_EVALUATION_WEIGHTS };

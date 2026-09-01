@@ -10,34 +10,14 @@ import {
   SEMANTIC_CACHE_PATH,
   SEMANTIC_CONFIG_PATH,
 } from "./config.js";
-import { AiError, ValidationError } from "./lib/errors.js";
+import { parseRequestLimitArg, validateRequestLimit } from "./lib/cli-limit.js";
+import { AiError } from "./lib/errors.js";
 import { loadRootEnv } from "./load-env.js";
 import { loadClusterConfig } from "./sources/cluster-config.js";
 import { loadSemanticConfig } from "./sources/semantic-config.js";
-import { runSemanticPipeline, validateRequestLimit } from "./sources/semantic-run.js";
+import { runSemanticPipeline } from "./sources/semantic-run.js";
 
-export function parseRequestLimitArg(argv) {
-  const equals = argv.find((arg) => arg.startsWith("--limit="));
-  let raw = null;
-  if (equals) {
-    raw = equals.slice("--limit=".length);
-  } else {
-    const index = argv.indexOf("--limit");
-    if (index === -1) return null;
-    raw = argv[index + 1];
-    if (raw == null || raw.startsWith("--")) {
-      throw new ValidationError(
-        "Invalid --limit. Use a positive integer (new AI requests, not cache hits)."
-      );
-    }
-  }
-  if (!/^[1-9]\d*$/.test(raw)) {
-    throw new ValidationError(
-      `Invalid --limit: ${raw}. Use a positive integer (new AI requests, not cache hits).`
-    );
-  }
-  return Number(raw);
-}
+export { parseRequestLimitArg, validateRequestLimit };
 
 export function parseSemanticArgs(argv) {
   const applyAi = argv.includes("--apply-ai");

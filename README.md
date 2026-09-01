@@ -9,7 +9,7 @@
 - Unified News Pool（normalized source の merge）
 - News Clusters（deterministic。説明可能な relationship / cluster。item は削除しない）
 - Semantic Clusters（candidate pair だけを AI 判定。deterministic cluster は上書きしない）
-- News Evaluation（cluster 単位の representative / deterministic signals。今回は AI 未評価）
+- News Evaluation（cluster 単位の representative / deterministic signals + 任意の 5軸 AI 評価）
 
 Web検索、News API、本文スクレイピング、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
 
@@ -304,7 +304,8 @@ model 解決順（変更なし）: `SEMANTIC_MODEL` → `OPENAI_MODEL` → `conf
 | Cluster | news-pool 欠落、schema 不正、所属 invariant 違反で exit `1`。壊れた cluster JSON は書かない |
 | Semantic dry-run | news-pool 欠落で exit `1`。AI は呼ばない。候補 JSON は atomic write |
 | Semantic `--apply-ai` | `OPENAI_API_KEY` なし / pool 欠落 / 不正な `--limit` で exit `1`。全 pair 失敗も exit `1`。一部失敗は exit `2`。`news-clusters.json` は触らない |
-| Evaluate | semantic / pool 欠落、cluster membership 不正で exit `1`。壊れた evaluated JSON は書かない。AI は呼ばない |
+| Evaluate default / dry-run | semantic / pool 欠落、cluster membership 不正で exit `1`。dry-run は書かない。AI は呼ばない |
+| Evaluate `--apply-ai` | `OPENAI_API_KEY` なし / 不正な `--limit` で exit `1`。requested AI 全失敗 `1`、一部失敗 `2`。unjudged は failure ではない。`news-semantic.json` は触らない |
 
 Web の exit `2` は partial failure です。CI で「1件でも失敗したら落とす」なら非0を失敗にしてください。silent ignore はしません。
 
@@ -323,6 +324,7 @@ Web の exit `2` は partial failure です。CI で「1件でも失敗したら
 | `data/processed/news-semantic.json` | Semantic judgments / clusters |
 | `data/processed/news-evaluated.json` | cluster representative / deterministic signals（scores は未評価） |
 | `data/cache/semantic-judgments.json` | Semantic judge cache（API key は含まない） |
+| `data/cache/evaluation-judgments.json` | Evaluation judge cache（API key は含まない） |
 
 いずれも `.tmp` → rename の atomic write です。
 
@@ -387,24 +389,62 @@ Semantic（実 API は使わない。mock judge）:
 Evaluate:
 
 - representative / signals は決定論的
-- 全 scores は null、baseScore は null
+- default / dry-run は AI 0
 - X 既存 scores を final にコピーしない
 - dry-run はファイルを書かない
 - semantic 入力は変更しない
 - membership / unknown item / representative 所属を検証
+- `--limit` は新規 request 上限。cache hit は数えない。limit 外は unjudged
+- 不正な `--limit` は fail
+- mock 5軸 scores / local baseScore / invalid score 拒否
+- failed / unjudged は scores を採用しない
+- cache hit では evaluator を呼ばない
+- evaluation order は決定論的（multi-item first）
 
 ### News Evaluation
 
 設定: `config/evaluation.json`
 
+**Evaluate** は各ニュース cluster の価値を測る段階です。**Editorial Select**（未実装）は今日の Digest として何を並べるかを決める段階です。この2つは別です。
+
 ```bash
-npm run evaluate -- --dry-run
+# AI なし。foundation output を書く
 npm run evaluate
+
+# AI なし。ファイルを書かない
+npm run evaluate -- --dry-run
+
+# 実 AI。--limit は今回の新規 request 上限（cache hit は数えない）
+npm run evaluate -- --apply-ai --limit 3
 ```
 
-Semantic cluster は変更しません。cluster ごとに representative と deterministic signals を付け、`status: unevaluated` で `news-evaluated.json` を書きます。X の既存 scores は final scores にコピーしません。今回 AI は呼びません。`--dry-run` はファイルを書きません。
+`--dry-run` と `--apply-ai` が両方ある場合は dry-run が勝ちます。`--limit 0` / `--limit -1` / `--limit abc` は明示 error です。
+
+Semantic cluster / membership / representative / signals は変更しません。default は `status: unevaluated` の foundation を `news-evaluated.json` に書きます。X の既存 scores は final scores にも prompt にも使いません。`--dry-run` はファイルを書きません。
 
 representative: `publishedAt` 新しい → `collectedAt` 新しい → title 非空 → summary 非空 → item id 昇順。source type / provider は優先しません。
+
+5軸（integer 1..5）: importance / informationValue / impact / novelty / personalRelevance。`baseScore` は local の weighted sum だけです。AI に baseScore は決めさせません。
+
+personalRelevance と importance は別軸です。personalRelevance が高いだけで importance / impact を上げません。重大な政治・災害・国際ニュースは personalRelevance が低くても importance / impact を高くできます。
+
+sourceDiversity は truth / credibility score ではありません。何社が報じたかの信号です。
+
+Evaluation order はニュースランキングではありません。少数の real AI 確認のための **API request execution order** です。
+
+1. multi-item cluster first
+2. sourceDiversity desc
+3. itemCount desc
+4. representative publishedAt desc
+5. clusterId asc
+
+dry-run は上位 10 evaluation targets をこの順で表示します。
+
+model 解決順: `EVALUATION_MODEL` → `OPENAI_MODEL` → `config/evaluation.json` の `model`（fallback `gpt-5-mini`）。
+
+Cache: `data/cache/evaluation-judgments.json`。ok のみ保存。cluster content / model / evaluatorVersion が変わると miss。
+
+failed / unjudged は scores / baseScore / reason を採用しません。limit による unjudged は failure ではありません。
 
 ## 将来
 
@@ -417,4 +457,4 @@ src/sources/web-news.js     # 未実装（検索・API等）
 src/sources/astronomy.js    # 未実装
 ```
 
-Unify / deterministic Cluster / Semantic / Evaluation foundation（representative + signals、AI 未評価）まで実装済みです。editorial ranking、Timeline Digest 生成はまだです。
+Unify / deterministic Cluster / Semantic / Evaluation（representative + 任意の 5軸 AI）まで実装済みです。Editorial Select、Picks、Timeline Digest 生成はまだです。

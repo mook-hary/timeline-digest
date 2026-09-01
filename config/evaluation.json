@@ -1,10 +1,19 @@
 {
   "schemaVersion": 1,
+  "evaluatorVersion": "news-evaluator-v1",
+  "provider": "openai",
+  "model": "gpt-5-mini",
+  "maxItemsPerCluster": 5,
+  "summaryClipChars": 400,
   "weights": {
     "importance": 0.3,
     "informationValue": 0.25,
     "impact": 0.2,
     "novelty": 0.15,
     "personalRelevance": 0.1
+  },
+  "openai": {
+    "timeoutMs": 30000,
+    "maxRetries": 1
   }
 }

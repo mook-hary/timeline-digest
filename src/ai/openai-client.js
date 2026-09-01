@@ -79,18 +79,19 @@ function isRetryableError(error) {
   return error?.code !== "AI_RESPONSE";
 }
 
-export function createOpenAiJudge(options = {}) {
+export function createOpenAiResponsesClient(options = {}) {
   const apiKey = options.apiKey;
   const model = options.model;
   const timeoutMs = options.timeoutMs ?? 30000;
   const maxRetries = options.maxRetries ?? 1;
   const sleepFn = options.sleep || sleep;
+  const missingModelMessage = options.missingModelMessage || "Model is not configured";
 
   if (!apiKey) {
     throw new AiError("OPENAI_API_KEY is not set");
   }
   if (!model) {
-    throw new AiError("Semantic model is not configured");
+    throw new AiError(missingModelMessage);
   }
 
   const Client = options.OpenAI || OpenAI;
@@ -101,8 +102,7 @@ export function createOpenAiJudge(options = {}) {
       timeout: timeoutMs,
     });
 
-  return async function openaiJudge({ itemA, itemB }) {
-    const payload = buildSemanticResponsesPayload({ model, itemA, itemB });
+  async function complete(payload) {
     let lastError;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
@@ -126,5 +126,29 @@ export function createOpenAiJudge(options = {}) {
       }
     }
     throw lastError;
+  }
+
+  return { model, client, complete };
+}
+
+export function createOpenAiJudge(options = {}) {
+  const { model, complete } = createOpenAiResponsesClient({
+    ...options,
+    missingModelMessage: "Semantic model is not configured",
+  });
+
+  return async function openaiJudge({ itemA, itemB }) {
+    return complete(buildSemanticResponsesPayload({ model, itemA, itemB }));
+  };
+}
+
+export function createOpenAiEvaluator(options = {}) {
+  const { complete } = createOpenAiResponsesClient({
+    ...options,
+    missingModelMessage: "Evaluation model is not configured",
+  });
+
+  return async function openaiEvaluator(payload) {
+    return complete(payload);
   };
 }

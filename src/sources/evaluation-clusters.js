@@ -166,7 +166,66 @@ export function buildEvaluatedCluster(cluster, itemsById, weights) {
     baseScore: computeBaseScore(scores, weights),
     reason: null,
     status: "unevaluated",
+    evaluation: null,
+    error: null,
+    errorDetail: null,
   };
+}
+
+export function selectSupportingItems(items, representative, maxItemsPerCluster) {
+  const rest = items
+    .filter((item) => item.id !== representative.id)
+    .sort(compareRepresentativeItems);
+  const extra = Math.max(0, maxItemsPerCluster - 1);
+  return rest.slice(0, extra);
+}
+
+export function sortEvaluationTargets(clusters) {
+  return [...clusters].sort((left, right) => {
+    const leftMulti = left.signals.itemCount > 1 ? 1 : 0;
+    const rightMulti = right.signals.itemCount > 1 ? 1 : 0;
+    if (rightMulti !== leftMulti) return rightMulti - leftMulti;
+    if (right.signals.sourceDiversity !== left.signals.sourceDiversity) {
+      return right.signals.sourceDiversity - left.signals.sourceDiversity;
+    }
+    if (right.signals.itemCount !== left.signals.itemCount) {
+      return right.signals.itemCount - left.signals.itemCount;
+    }
+    const published = compareNewerFirst(
+      left.representative.publishedAt,
+      right.representative.publishedAt
+    );
+    if (published !== 0) return published;
+    if (left.clusterId < right.clusterId) return -1;
+    if (left.clusterId > right.clusterId) return 1;
+    return 0;
+  });
+}
+
+export function applyEvaluationResult(cluster, judgment, meta) {
+  const next = {
+    ...cluster,
+    scores: emptyEvaluationScores(),
+    baseScore: null,
+    reason: null,
+    status: judgment.status,
+    error: judgment.error || null,
+    errorDetail: judgment.errorDetail || null,
+    evaluation: {
+      model: meta.model,
+      evaluatorVersion: meta.evaluatorVersion,
+      cacheHit: Boolean(meta.cacheHit),
+    },
+  };
+  if (judgment.status === "ok") {
+    next.scores = { ...judgment.scores };
+    next.baseScore = computeBaseScore(next.scores, meta.weights);
+    next.reason = judgment.reason;
+    next.status = "evaluated";
+    next.error = null;
+    next.errorDetail = null;
+  }
+  return next;
 }
 
 export function validateEvaluatedClusters(items, evaluated, originalClusters) {
@@ -201,6 +260,33 @@ export function validateEvaluatedClusters(items, evaluated, originalClusters) {
       throw new ValidationError(
         `signals for cluster "${cluster.clusterId}" do not match cluster items`
       );
+    }
+    const expectedRep = selectRepresentative(members);
+    if (cluster.representative.itemId !== expectedRep.id) {
+      throw new ValidationError(
+        `representative for cluster "${cluster.clusterId}" changed`
+      );
+    }
+    const scored = cluster.status === "evaluated";
+    if (scored) {
+      if (computeBaseScore(cluster.scores) == null) {
+        throw new ValidationError(
+          `evaluated cluster "${cluster.clusterId}" has invalid scores`
+        );
+      }
+    } else {
+      for (const axis of Object.keys(cluster.scores || {})) {
+        if (cluster.scores[axis] != null) {
+          throw new ValidationError(
+            `cluster "${cluster.clusterId}" status ${cluster.status} must have null scores`
+          );
+        }
+      }
+      if (cluster.baseScore != null || cluster.reason != null) {
+        throw new ValidationError(
+          `cluster "${cluster.clusterId}" status ${cluster.status} must not adopt scores`
+        );
+      }
     }
   }
 }

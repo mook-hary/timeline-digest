@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ROOT_DIR } from "../config.js";
 import { writeJsonAtomic } from "../lib/atomic-write.js";
+import { validateRequestLimit } from "../lib/cli-limit.js";
 import { AiError, ValidationError } from "../lib/errors.js";
 import { judgeSemanticPair } from "../ai/semantic-judge.js";
 import {
@@ -73,15 +74,7 @@ function countJudgments(judgments) {
   return counts;
 }
 
-export function validateRequestLimit(value) {
-  if (value == null) return null;
-  if (!Number.isInteger(value) || value < 1) {
-    throw new ValidationError(
-      "Invalid --limit. Use a positive integer (new AI requests, not cache hits)."
-    );
-  }
-  return value;
-}
+export { validateRequestLimit };
 
 function candidateToJudgment(candidate, judgment, model, judgeVersion) {
   const [itemA, itemB] = pairIds(candidate.itemA, candidate.itemB);
