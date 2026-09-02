@@ -10,6 +10,7 @@
 - News Clusters（deterministic。説明可能な relationship / cluster。item は削除しない）
 - Semantic Clusters（candidate pair だけを AI 判定。deterministic cluster は上書きしない）
 - News Evaluation（cluster 単位の representative / deterministic signals + 任意の 5軸 AI 評価）
+- Editorial Select（local deterministic。Digest 候補の選定。AI なし）
 
 Web検索、News API、本文スクレイピング、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
 
@@ -401,11 +402,22 @@ Evaluate:
 - cache hit では evaluator を呼ばない
 - evaluation order は決定論的（multi-item first）
 
+Select:
+
+- selected + rejected が入力 cluster をちょうど分割する
+- Evaluate scores / membership / representative は変更しない
+- unevaluated と quality floor は selected に入らない
+- source type だけで X を落とさない
+- major / personal / general gate と cap
+- related-group は原則1件
+- dry-run はファイルを書かない
+- 不正 config / 欠落入力は fail
+
 ### News Evaluation
 
 設定: `config/evaluation.json`
 
-**Evaluate** は各ニュース cluster の価値を測る段階です。**Editorial Select**（未実装）は今日の Digest として何を並べるかを決める段階です。この2つは別です。
+**Evaluate** は各ニュース cluster の価値を測る段階です。**Editorial Select** は今日の Digest として何を並べるかを決める段階です。この2つは別です。
 
 ```bash
 # AI なし。foundation output を書く
@@ -446,6 +458,26 @@ Cache: `data/cache/evaluation-judgments.json`。ok のみ保存。cluster conten
 
 failed / unjudged は scores / baseScore / reason を採用しません。limit による unjudged は failure ではありません。
 
+### Editorial Select
+
+設定: `config/select.json`
+
+**Editorial Select** は Evaluate 済み cluster から「今日読む集合」を選びます。baseScore 上位をそのまま Digest にはしません。v1 は完全に local deterministic で、API は呼びません。
+
+```bash
+# 本番 write（atomic）
+npm run select
+
+# ファイルを書かない
+npm run select -- --dry-run
+```
+
+入力: `data/processed/news-evaluated.json` と `data/processed/news-semantic.json`（related-event を redundancy に再利用）。Semantic cluster / Evaluate scores は変更しません。
+
+quality floor / major / personal / general の3 lane、related-group は原則1件、topic の diminishing returns、target 10 / max 14、padding なし。詳細は `config/select.json`。
+
+出力: `data/processed/news-selected.json`。related-group の人間レビュー用に `data/processed/news-selected-review.json`。`--dry-run` はどちらも書きません。
+
 ## 将来
 
 `src/sources/` に source adapter を足し、最終的には同じ Normalized News Item へ変換します。
@@ -457,4 +489,4 @@ src/sources/web-news.js     # 未実装（検索・API等）
 src/sources/astronomy.js    # 未実装
 ```
 
-Unify / deterministic Cluster / Semantic / Evaluation（representative + 任意の 5軸 AI）まで実装済みです。Editorial Select、Picks、Timeline Digest 生成はまだです。
+Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select（local）まで実装済みです。Picks、Timeline Digest 生成はまだです。

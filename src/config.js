@@ -115,4 +115,20 @@ export const EVALUATION_CACHE_PATH = path.join(
   "evaluation-judgments.json"
 );
 
+export const NEWS_SELECTED_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-selected.json"
+);
+
+export const NEWS_SELECTED_REVIEW_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-selected-review.json"
+);
+
+export const SELECT_CONFIG_PATH = path.join(ROOT_DIR, "config", "select.json");
+
 export { ROOT_DIR };
