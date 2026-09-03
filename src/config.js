@@ -131,4 +131,34 @@ export const NEWS_SELECTED_REVIEW_PATH = path.join(
 
 export const SELECT_CONFIG_PATH = path.join(ROOT_DIR, "config", "select.json");
 
+export const DIGEST_CONFIG_PATH = path.join(ROOT_DIR, "config", "digest.json");
+
+export const NEWS_DIGEST_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-digest.json"
+);
+
+export const NEWS_DIGEST_MARKDOWN_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-digest.md"
+);
+
+export const NEWS_DIGEST_REVIEW_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "processed",
+  "news-digest-review.json"
+);
+
+export const DIGEST_CACHE_PATH = path.join(
+  ROOT_DIR,
+  "data",
+  "cache",
+  "digest-generations.json"
+);
+
 export { ROOT_DIR };

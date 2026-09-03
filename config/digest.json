@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+    "generatorVersion": "news-digest-generator-v2",
+  "provider": "openai",
+  "model": "gpt-5-mini",
+  "maxSupportingItems": 4,
+  "summaryClipChars": 400,
+  "headlineMinChars": 8,
+  "headlineMaxChars": 80,
+  "summaryMaxChars": 400,
+  "whyItMattersMaxChars": 200,
+  "openai": {
+    "timeoutMs": 30000,
+    "maxRetries": 1
+  }
+}

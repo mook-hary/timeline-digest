@@ -11,8 +11,9 @@
 - Semantic Clusters（candidate pair だけを AI 判定。deterministic cluster は上書きしない）
 - News Evaluation（cluster 単位の representative / deterministic signals + 任意の 5軸 AI 評価）
 - Editorial Select（local deterministic。Digest 候補の選定。AI なし）
+- Digest Generation（Select 済み cluster の日本語化。本文 fetch なし。任意の AI editor）
 
-Web検索、News API、本文スクレイピング、source横断の重複削除、ランキング、Digest生成はまだ行いません。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
+Web検索、News API、本文スクレイピング、source横断の重複削除、ランキングはまだ行いません。Digest Generation はニュースを選び直さず、Select 済みの集合を人間向けに変換します。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
 
 ## 責務の境界
 
@@ -307,6 +308,8 @@ model 解決順（変更なし）: `SEMANTIC_MODEL` → `OPENAI_MODEL` → `conf
 | Semantic `--apply-ai` | `OPENAI_API_KEY` なし / pool 欠落 / 不正な `--limit` で exit `1`。全 pair 失敗も exit `1`。一部失敗は exit `2`。`news-clusters.json` は触らない |
 | Evaluate default / dry-run | semantic / pool 欠落、cluster membership 不正で exit `1`。dry-run は書かない。AI は呼ばない |
 | Evaluate `--apply-ai` | `OPENAI_API_KEY` なし / 不正な `--limit` で exit `1`。requested AI 全失敗 `1`、一部失敗 `2`。unjudged は failure ではない。`news-semantic.json` は触らない |
+| Digest default / dry-run | selected / evaluated / pool 欠落で exit `1`。dry-run は書かない。AI は呼ばない。item は fallback |
+| Digest `--apply-ai` | `OPENAI_API_KEY` なし / 不正な `--limit` で exit `1`。requested AI 全失敗 `1`、一部失敗 `2`。limit 外は fallback であり failure ではない。Select / Evaluate / pool は触らない |
 
 Web の exit `2` は partial failure です。CI で「1件でも失敗したら落とす」なら非0を失敗にしてください。silent ignore はしません。
 
@@ -324,8 +327,14 @@ Web の exit `2` は partial failure です。CI で「1件でも失敗したら
 | `data/processed/news-semantic-candidates.json` | Semantic dry-run の候補 |
 | `data/processed/news-semantic.json` | Semantic judgments / clusters |
 | `data/processed/news-evaluated.json` | cluster representative / deterministic signals（scores は未評価） |
+| `data/processed/news-selected.json` | Editorial Select の selected / rejected |
+| `data/processed/news-selected-review.json` | related-group の確認用 |
+| `data/processed/news-digest.json` | Digest Generation の machine digest |
+| `data/processed/news-digest.md` | 日本語 Markdown |
+| `data/processed/news-digest-review.json` | 原文 vs 生成の確認用 |
 | `data/cache/semantic-judgments.json` | Semantic judge cache（API key は含まない） |
 | `data/cache/evaluation-judgments.json` | Evaluation judge cache（API key は含まない） |
+| `data/cache/digest-generations.json` | Digest Generation cache（ok のみ。API key は含まない） |
 
 いずれも `.tmp` → rename の atomic write です。
 
@@ -413,6 +422,17 @@ Select:
 - dry-run はファイルを書かない
 - 不正 config / 欠落入力は fail
 
+Digest:
+
+- selected N → digest N。rejected は復活しない
+- rank / clusterId / scores / baseScore はコピーのまま
+- prompt に scores / Evaluate.reason を入れない
+- 本文 HTTP fetch をしない
+- dry-run は API 0 / write 0
+- 無印実行は全件 fallback
+- `--limit` は新規 request。cache hit は数えない
+- invalid AI / 生成 URL は fallback。item は消さない
+
 ### News Evaluation
 
 設定: `config/evaluation.json`
@@ -478,6 +498,31 @@ quality floor / major / personal / general の3 lane、related-group は原則1�
 
 出力: `data/processed/news-selected.json`。related-group の人間レビュー用に `data/processed/news-selected-review.json`。`--dry-run` はどちらも書きません。
 
+### Digest Generation
+
+設定: `config/digest.json`
+
+**Digest Generation** は Select 済み cluster を日本語の読み物へ変換します。ニュースは選び直しません。v1 は記事本文を再 fetch しません。AI は editor（headline / summary / whyItMatters）だけです。
+
+```bash
+# API なし。全件 fallback で JSON / Markdown / review を書く
+npm run digest
+
+# ファイルを書かない
+npm run digest -- --dry-run
+
+# 実 AI。--limit は今回の新規 request 上限（cache hit は数えない）
+npm run digest -- --apply-ai --limit 3
+```
+
+`--dry-run` と `--apply-ai` が両方ある場合は dry-run が勝ちます。入力: `news-selected.json` + `news-evaluated.json` + `news-pool.json`。これらは書き換えません。
+
+JSON は Select rank 順。Markdown は「主要ニュース」（major）と「関心ニュース」（personal）。scores は Markdown に出しません。AI 失敗・limit 外は fallback（元 title / summary、whyItMatters は null）で item を残します。
+
+model 解決順: `DIGEST_MODEL` → `OPENAI_MODEL` → `config/digest.json` の `model`（fallback `gpt-5-mini`）。
+
+Cache: `data/cache/digest-generations.json`。ok のみ保存。prompt 内容 / model / generatorVersion が変わると miss。rank だけの変化では miss しません。現在の generatorVersion は `news-digest-generator-v2`。
+
 ## 将来
 
 `src/sources/` に source adapter を足し、最終的には同じ Normalized News Item へ変換します。
@@ -489,4 +534,4 @@ src/sources/web-news.js     # 未実装（検索・API等）
 src/sources/astronomy.js    # 未実装
 ```
 
-Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select（local）まで実装済みです。Picks、Timeline Digest 生成はまだです。
+Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select / Digest Generation まで実装済みです。Publish（Web UI / GitHub Pages 等）はまだです。

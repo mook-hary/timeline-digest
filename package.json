@@ -15,6 +15,7 @@
     "semantic": "node src/semantic.js",
     "evaluate": "node src/evaluate.js",
     "select": "node src/select.js",
+    "digest": "node src/digest.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
