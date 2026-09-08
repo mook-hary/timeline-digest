@@ -16,6 +16,7 @@
     "evaluate": "node src/evaluate.js",
     "select": "node src/select.js",
     "digest": "node src/digest.js",
+    "references": "node src/references.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

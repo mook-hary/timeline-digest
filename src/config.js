@@ -162,3 +162,7 @@ export const DIGEST_CACHE_PATH = path.join(
 );
 
 export { ROOT_DIR };
+
+export const REFERENCES_CANDIDATES_PATH = path.join(
+  ROOT_DIR, "data", "processed", "references-candidates.json"
+);

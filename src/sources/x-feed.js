@@ -1,6 +1,7 @@
 import { writeJsonAtomic } from "../lib/atomic-write.js";
 import { fetchJson } from "../lib/fetch-json.js";
 import { ValidationError } from "../lib/errors.js";
+import { normalizeVision, normalizeVisual, normalizeXMedia } from "./x-visual.js";
 
 export const X_FEED_SOURCE = "x-timeline-collector";
 export const X_FEED_SCHEMA_VERSION = 1;
@@ -222,6 +223,9 @@ export function normalizeXFeedItem(item) {
     publishedAt: nullableString(item.postedAt),
     collectedAt: nullableString(item.collectedAt),
     scores: normalizeScores(item.scores),
+    media: normalizeXMedia(item.media),
+    vision: normalizeVision(item.vision),
+    visual: normalizeVisual(item.visual),
   };
 }
 
