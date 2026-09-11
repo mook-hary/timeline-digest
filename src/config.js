@@ -166,3 +166,6 @@ export { ROOT_DIR };
 export const REFERENCES_CANDIDATES_PATH = path.join(
   ROOT_DIR, "data", "processed", "references-candidates.json"
 );
+
+export const REFERENCES_SELECTION_CONFIG_PATH = path.join(ROOT_DIR, "config", "references-selection.json");
+export const REFERENCES_PATH = path.join(ROOT_DIR, "data", "processed", "references.json");

@@ -11,6 +11,7 @@ import { joinDigestRecords } from "../src/sources/digest-inputs.js";
 import { buildJudgeUserMessage } from "../src/ai/semantic-prompt.js";
 import { computeBaseScore } from "../src/lib/evaluation-score.js";
 import { generateReferencesCandidates } from "../src/sources/references-candidates.js";
+import { buildReferencesSelection } from "../src/sources/references-selection.js";
 import { loadFixture } from "./helpers.js";
 
 const NOW = "2026-09-08T00:00:00.000Z";
@@ -93,7 +94,26 @@ test("visual metadata is independent of every news stage and AI payload", async 
     .map((r) => digestPayloadForRecord(r, digestConfig));
   assert.deepEqual(payloads(enriched), payloads(original), "digest AI payload and cache hash unchanged");
 
-  assert.equal((await generateReferencesCandidates({ pool: enriched, now: () => NOW })).document.candidateCount, 3);
+  const candidates = (await generateReferencesCandidates({ pool: enriched, now: () => NOW })).document;
+  assert.equal(candidates.candidateCount, 3);
+  const inputSnapshot = structuredClone(enriched);
+  const candidatesSnapshot = structuredClone(candidates);
+  for (const primaryMinValue of [3, 4, 5]) {
+    const references = buildReferencesSelection(candidates, {
+      schemaVersion: 1, policyId: "references-select-v1", primaryMinValue,
+    }, { generatedAt: NOW });
+    assert.equal(references.stats.selected, 6 - primaryMinValue);
+    assert.equal(references.stats.selected + references.stats.secondary, 3);
+  }
+  assert.deepEqual(candidates, candidatesSnapshot);
+  assert.deepEqual(enriched, inputSnapshot);
+  assert.deepEqual(await cluster(enriched), beforeCluster, "Phase 2 policy changes do not affect Cluster");
+  assert.deepEqual(await evaluate(enriched), beforeEval, "Phase 2 policy changes do not affect Evaluate");
+  assert.deepEqual((await select(evaluated)).document, selected.document, "Phase 2 policy changes do not affect Editorial Select");
+  const afterReferencesDigest = await digest(enriched);
+  for (const key of ["document", "markdown", "review", "stats"]) {
+    assert.deepEqual(afterReferencesDigest[key], beforeDigest[key], `Phase 2 leaves digest ${key} unchanged`);
+  }
   assert.equal(calls, 0);
 });
 

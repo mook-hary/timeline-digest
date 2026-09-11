@@ -17,6 +17,7 @@
     "select": "node src/select.js",
     "digest": "node src/digest.js",
     "references": "node src/references.js",
+    "references:select": "node src/references-select.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

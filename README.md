@@ -13,6 +13,7 @@
 - Editorial Select（local deterministic。Digest 候補の選定。AI なし）
 - Digest Generation（Select 済み cluster の日本語化。本文 fetch なし。任意の AI editor）
 - References Candidates V1（Poolから独立分岐。Xのmediaとvisual.valueでローカル候補生成。最終選定・UIなし）。契約と実行方法は [References V1](docs/references-v1.md)。
+- References Selection V1（Candidatesをselected/secondaryに分類。全候補を保持し、Evidenceは重複可能なroleとして集計）。`npm run references:select`。暫定表示閾値4の契約は [References Selection V1](docs/references-selection-v1.md)。UIなし。
 
 Web検索、News API、本文スクレイピング、source横断の重複削除、ランキングはまだ行いません。Digest Generation はニュースを選び直さず、Select 済みの集合を人間向けに変換します。RSS/Atom は Webニュース入力の **最初の一方式** であり、唯一の取得方式ではありません。Unify は編集ではなく、normalized item を損失なく束ねる段階です。Cluster は dedupe ではなく、同じ Pool item を残したまま関係だけを記録します。全 item の自由分類や embedding は使いません。Semantic 層の AI は、ローカル生成した候補 pair の関係分類だけです。
 
