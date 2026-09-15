@@ -3,11 +3,7 @@ import { readFileSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, it } from "node:test";
-import {
-  NEWS_EVALUATED_PATH,
-  NEWS_SEMANTIC_PATH,
-  SELECT_CONFIG_PATH,
-} from "../src/config.js";
+import { SELECT_CONFIG_PATH } from "../src/config.js";
 import { computeBaseScore } from "../src/lib/evaluation-score.js";
 import { parseSelectArgs, runSelect } from "../src/select.js";
 import {
@@ -811,6 +807,8 @@ describe("editorial select v1", () => {
       ]),
       semantic: makeSemantic(),
       outputPath,
+      reviewPath: path.join(dir, "news-selected-review.json"),
+      now: () => "2026-09-01T10:00:00.000Z",
       stdout,
     });
     assert.equal(code, 0);
@@ -824,16 +822,32 @@ describe("editorial select v1", () => {
     assert.deepEqual(parseSelectArgs([]), { dryRun: false });
   });
 
-  it("real evaluated document partitions all clusters without writing", async () => {
-    const evaluated = JSON.parse(readFileSync(NEWS_EVALUATED_PATH, "utf8"));
-    const semantic = JSON.parse(readFileSync(NEWS_SEMANTIC_PATH, "utf8"));
+  it("fixture evaluated document partitions all clusters without writing", async () => {
+    const evaluated = makeEvaluated([
+      makeCluster({
+        clusterId: "cluster:keep",
+        itemIds: ["item:keep", "item:support"],
+        title: "Kyiv weapons depot strike",
+        scores: { importance: 5, informationValue: 4, impact: 5, novelty: 4, personalRelevance: 3 },
+      }),
+      makeCluster({ clusterId: "cluster:reject", status: "unjudged", scores: null, baseScore: null }),
+    ]);
+    const semantic = makeSemantic({
+      clusters: evaluated.clusters.map((cluster) => ({ id: cluster.clusterId, itemIds: cluster.itemIds.slice() })),
+    });
+    const snapshot = structuredClone(evaluated);
+    const dir = await makeTempDir();
     const result = await runSelectPipeline({
       dryRun: true,
       selectConfig,
       evaluated,
       semantic,
+      outputPath: path.join(dir, "news-selected.json"),
+      reviewPath: path.join(dir, "news-selected-review.json"),
       now: () => "2026-09-01T10:00:00.000Z",
     });
+    assert.equal(result.document.selected.length, 1);
+    assert.equal(result.document.rejected.length, 1);
     assert.equal(result.stats.inputClusters, evaluated.clusters.length);
     assert.equal(
       result.document.selected.length + result.document.rejected.length,
@@ -850,8 +864,10 @@ describe("editorial select v1", () => {
       assert.equal(inSelected && inRejected, false);
       assert.deepEqual(
         cluster.itemIds,
-        evaluated.clusters.find((entry) => entry.clusterId === cluster.clusterId).itemIds
+        snapshot.clusters.find((entry) => entry.clusterId === cluster.clusterId).itemIds
       );
     }
+    assert.deepEqual(evaluated, snapshot);
+    assert.deepEqual(await readdir(dir), [], "dry-run writes no selection or review");
   });
 });

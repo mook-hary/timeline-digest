@@ -15,12 +15,7 @@ import {
   DIGEST_SCHEMA_NAME,
 } from "../src/ai/digest-prompt.js";
 import { extractOpenAiErrorDiagnostic } from "../src/ai/openai-error.js";
-import {
-  DIGEST_CONFIG_PATH,
-  NEWS_EVALUATED_PATH,
-  NEWS_POOL_PATH,
-  NEWS_SELECTED_PATH,
-} from "../src/config.js";
+import { DIGEST_CONFIG_PATH } from "../src/config.js";
 import { parseDigestArgs, runDigest } from "../src/digest.js";
 import { computeBaseScore } from "../src/lib/evaluation-score.js";
 import {
@@ -789,6 +784,7 @@ describe("digest generation v2", () => {
       markdownPath: path.join(dir, "news-digest.md"),
       reviewPath: path.join(dir, "news-digest-review.json"),
       cachePath: path.join(dir, "cache.json"),
+      now: () => "2026-09-02T12:00:00.000Z",
       stdout,
       stderr: collectWriter(),
     });
@@ -797,10 +793,8 @@ describe("digest generation v2", () => {
     await assert.rejects(() => readFile(path.join(dir, "news-digest.json")), { code: "ENOENT" });
   });
 
-  it("real selected document dry-run partitions all selected without writing", async () => {
-    const selected = JSON.parse(readFileSync(NEWS_SELECTED_PATH, "utf8"));
-    const evaluated = JSON.parse(readFileSync(NEWS_EVALUATED_PATH, "utf8"));
-    const pool = JSON.parse(readFileSync(NEWS_POOL_PATH, "utf8"));
+  it("fixture selected document dry-run partitions all selected without writing", async () => {
+    const { selected, evaluated, pool } = fixtureSet();
     const stdout = collectWriter();
     const dir = await makeTempDir();
     const code = await runDigest({
@@ -812,13 +806,17 @@ describe("digest generation v2", () => {
       outputPath: path.join(dir, "news-digest.json"),
       markdownPath: path.join(dir, "news-digest.md"),
       reviewPath: path.join(dir, "news-digest-review.json"),
+      cachePath: path.join(dir, "cache.json"),
+      now: () => "2026-09-02T12:00:00.000Z",
       stdout,
       stderr: collectWriter(),
     });
     assert.equal(code, 0);
-    assert.equal(selected.selected.length, 11);
-    assert.match(stdout.toString(), /digest items: 11/);
+    assert.equal(selected.selected.length, 3);
+    assert.match(stdout.toString(), /selected input: 3/);
+    assert.match(stdout.toString(), /digest items: 3/);
     assert.match(stdout.toString(), /API calls: 0/);
     await assert.rejects(() => readFile(path.join(dir, "news-digest.json")), { code: "ENOENT" });
+    assert.deepEqual(await readdir(dir), [], "dry-run writes no JSON, Markdown, review or cache");
   });
 });
