@@ -537,3 +537,91 @@ src/sources/astronomy.js    # 未実装
 ```
 
 Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select / Digest Generation まで実装済みです。Publish（Web UI / GitHub Pages 等）はまだです。
+
+## Daily runner foundation (Phase 1)
+
+`npm run daily` currently exits **1** with “production pipeline is not wired”. It
+never starts ingest or AI. `npm run daily -- --self-test` explicitly runs one
+local fixture worker, writes isolated fixture data, and labels the result a
+foundation self-test; it does **not** produce or publish a daily edition.
+`npm run daily -- --recover-lock` only recovers a provably dead local owner;
+it does not start another run. No scheduler is installed.
+
+### Run and state contract
+
+Runtime data is ignored by Git:
+
+```text
+data/daily/
+  lock/owner.json
+  runs/<UTC runId>/
+    run.json
+    work/
+```
+
+Run IDs use `YYYYMMDDTHHmmssZ` (for example `20260921T081500Z`). The programmatic
+`runDaily({ now, root, stages, config, signal })` interface accepts a fixed clock
+and temporary root for deterministic tests. A same-second collision fails
+without overwriting history; retry with a later timestamp.
+
+`run.json` schemaVersion 1 records `runId`, `mode: "foundation"`, `startedAt`,
+`finishedAt`, `status`, `retainUntil`, `stages`, and `summary.failed/degraded`
+(stage IDs). Each stage records its ID, status, start/end timestamps and a fixed,
+concise diagnostic code. Arbitrary worker output/errors, secrets, environment,
+and stacks are not saved. Updates use same-directory temporary files and atomic
+rename. History consists of these run directories. Retention days determine
+`retainUntil`; automatic deletion is deferred, so history is not pruned yet.
+
+Run states support `running`, `publishing`, `succeeded`, `succeeded_degraded`,
+`failed`, and `interrupted`. Phase 1 does not enter `publishing`. Stage states
+support `pending`, `running`, `succeeded`, `degraded`, `failed`, and `skipped`.
+A failed stage stops execution and remaining stages are explicitly skipped.
+Terminal states cannot be restarted or changed to success.
+
+### Worker adapter contract
+
+The programmatic stage descriptor is
+`{ id, moduleUrl, inputs, outputs, skip }`. `moduleUrl` is a trusted local ES
+module exporting an async default function; `inputs`/`outputs` map names to
+paths relative to this run's `work/`. The adapter receives absolute resolved
+`inputs`/`outputs`, `runId`, `workDir`, `workPath(relative)` and
+`writeJson(relative, value)`. Declared paths and helpers reject traversal,
+absolute paths, and existing symlinks. Adapters must pass these explicit paths
+to pipeline modules rather than use their canonical CLI defaults. Each adapter
+returns `{ status: "succeeded" | "degraded" | "failed" | "skipped" }`.
+A descriptor with `skip: true` is skipped before starting a worker.
+
+Workers have an empty environment and their stdout/stderr are drained without
+retention. Completion requires both a valid result and a clean worker exit;
+a premature success result cannot hide lingering work or a nonzero exit.
+Per-stage and remaining whole-run deadlines use elapsed monotonic time,
+independent of the injected timestamp clock. Expiry terminates the worker and
+waits for exit before recording failure or releasing the lock. No automatic
+retry is added. SIGINT/SIGTERM abort the active CLI worker and record interrupted
+state. An unhandled crash/SIGKILL can leave the owned lock and running history
+for explicit recovery.
+
+Worker termination and scoped paths are an orchestration boundary, **not an OS
+filesystem/security sandbox**. Only trusted adapters are supported; they must
+not spawn detached child work, write outside the provided paths, or introduce
+symlink races. Production adapters are deferred to Phase 2.
+
+### Lock and policy
+
+Exclusive directory creation acquires the single Daily lock. Owner metadata
+contains a random token, PID, hostname, run ID and acquisition time. Only the
+matching token can release the lock. Age never authorizes takeover. Explicit
+recovery requires a valid local owner with `kill(pid, 0)` reporting `ESRCH`;
+live PIDs, reused PIDs, remote hosts, permission errors, missing/corrupt metadata,
+and incomplete competing recovery are refused. A recovered nonterminal run is
+marked interrupted before removing the lock. Uncertain cases require manual
+operator investigation; there is no force flag.
+
+`config/daily.json` defines default/per-stage deadlines, whole-run deadline,
+and history retention. Freshness policy fields are reserved for later phases:
+X uses verified `collectionCompletedAt` (36 hours, 5 minutes future tolerance);
+null means unverified. `generatedAt` is export metadata only. Web old metadata
+has a 7-day diagnostic threshold. Phase 1 performs no fetch or freshness
+inference. Pipeline wiring, AI environment forwarding, bounded fetch, policy
+classification, last-known-good promotion and publication remain Phase 2 work.
+Existing standalone pipeline commands and editorial algorithms are unchanged.

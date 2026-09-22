@@ -18,6 +18,7 @@
     "digest": "node src/digest.js",
     "references": "node src/references.js",
     "references:select": "node src/references-select.js",
+    "daily": "node src/daily.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

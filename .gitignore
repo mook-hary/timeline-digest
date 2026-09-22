@@ -10,3 +10,6 @@ data/processed/*
 !data/processed/.gitkeep
 data/cache/*
 !data/cache/.gitkeep
+
+# Daily run history, work files and owned locks
+/data/daily/

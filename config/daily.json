@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "execution": {
+    "stageDeadlineMs": 300000,
+    "stageDeadlinesMs": {},
+    "runDeadlineMs": 1800000
+  },
+  "retention": { "historyDays": 30 },
+  "freshness": {
+    "x": { "field": "collectionCompletedAt", "maxAgeHours": 36, "futureToleranceMinutes": 5 },
+    "web": { "oldMetadataDiagnosticDays": 7 }
+  }
+}
