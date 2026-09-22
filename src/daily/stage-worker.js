@@ -19,7 +19,7 @@ try {
         fs.writeFileSync(file, JSON.stringify(value));
       } });
   }
-  parentPort.postMessage({ status: result?.status });
+  parentPort.postMessage({ status: result?.status, diagnostics: result?.diagnostics ?? [] });
 } catch {
   // Never persist module errors, environment values, stack traces or payloads.
   parentPort.postMessage({ status: "failed" });

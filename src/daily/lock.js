@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
-import { timestamp, transitionRun, transitionStage, writeState } from "./state.js";
+import { FILES } from "./contract.js";
+import { timestamp, transitionRun, transitionStage, workPath, writeState } from "./state.js";
 
 function ownerAt(lock) {
   return JSON.parse(fs.readFileSync(path.join(lock, "owner.json"), "utf8"));
@@ -58,6 +59,7 @@ export function recoverLock(root, { now, probe = pid => process.kill(pid, 0) } =
         }
         transitionRun(state, "interrupted", at);
         writeState(file, state);
+        if (state.mode === "candidate") fs.rmSync(workPath(path.join(root, "runs", owner.runId, "work"), FILES.manifest), { force: true });
       }
     }
     fs.unlinkSync(path.join(lock, "owner.json"));

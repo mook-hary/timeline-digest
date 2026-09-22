@@ -1,12 +1,14 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runProductionDaily } from "./daily/pipeline.js";
+import { loadRootEnv } from "./load-env.js";
 import { runDaily } from "./daily/run.js";
 import { recoverLock } from "./daily/lock.js";
 
-export async function runDailyCli(argv = process.argv.slice(2), { stdout = process.stdout, stderr = process.stderr } = {}) {
-  const root = fileURLToPath(new URL("../data/daily", import.meta.url));
-  if (argv.length !== 1 || !["--self-test", "--recover-lock"].includes(argv[0])) {
-    stderr.write("Daily production pipeline is not wired (Phase 1). Use --self-test for a local fixture run or --recover-lock for explicit recovery.\n");
+export async function runDailyCli(argv = process.argv.slice(2), { stdout = process.stdout, stderr = process.stderr, root: rootOverride, productionRunner = runProductionDaily, environment } = {}) {
+  const root = rootOverride ?? fileURLToPath(new URL("../data/daily", import.meta.url));
+  if (argv.length > 1 || (argv.length === 1 && !["--self-test", "--recover-lock"].includes(argv[0]))) {
+    stderr.write("Usage: daily [--self-test | --recover-lock]. Default builds a run-local candidate only; never promotes.\n");
     return 1;
   }
   const controller = new AbortController();
@@ -19,11 +21,18 @@ export async function runDailyCli(argv = process.argv.slice(2), { stdout = proce
       stdout.write("Dead local Daily lock recovered. No run started.\n");
       return 0;
     }
+    if (argv.length === 0) {
+      const workerEnv = environment ?? { ...process.env };
+      if (environment === undefined) loadRootEnv({ processEnv: workerEnv });
+      const { state } = await productionRunner({ root, workerEnv, signal: controller.signal });
+      stdout.write(`Daily candidate only: ${state.runId} ${state.status}; no promotion performed.\n`);
+      return state.status === "succeeded" ? 0 : state.status === "succeeded_degraded" ? 2 : 1;
+    }
     const { state } = await runDaily({ root, stages: [{ id: "foundation", moduleUrl: null }], signal: controller.signal });
     stdout.write(`Foundation self-test only: ${state.runId} ${state.status}; no edition produced.\n`);
     return ["succeeded", "succeeded_degraded"].includes(state.status) ? 0 : 1;
   } catch {
-    stderr.write("Daily foundation failed; inspect local run state/lock. No edition produced.\n");
+    stderr.write("Daily failed; inspect local run state/lock. No edition promoted.\n");
     return 1;
   } finally {
     process.removeListener("SIGINT", interrupt);

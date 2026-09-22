@@ -5,9 +5,20 @@
     "stageDeadlinesMs": {},
     "runDeadlineMs": 1800000
   },
-  "retention": { "historyDays": 30 },
+  "retention": {
+    "historyDays": 30
+  },
   "freshness": {
-    "x": { "field": "collectionCompletedAt", "maxAgeHours": 36, "futureToleranceMinutes": 5 },
-    "web": { "oldMetadataDiagnosticDays": 7 }
+    "x": {
+      "field": "collectionCompletedAt",
+      "maxAgeHours": 36,
+      "futureToleranceMinutes": 5
+    },
+    "web": {
+      "oldMetadataDiagnosticDays": 7
+    }
+  },
+  "fetch": {
+    "timeoutMs": 30000
   }
 }

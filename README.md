@@ -538,18 +538,35 @@ src/sources/astronomy.js    # 未実装
 
 Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select / Digest Generation まで実装済みです。Publish（Web UI / GitHub Pages 等）はまだです。
 
-## Daily runner foundation (Phase 1)
+## Daily runner (Phase 2: candidate only)
 
-`npm run daily` currently exits **1** with “production pipeline is not wired”. It
-never starts ingest or AI. `npm run daily -- --self-test` explicitly runs one
-local fixture worker, writes isolated fixture data, and labels the result a
-foundation self-test; it does **not** produce or publish a daily edition.
-`npm run daily -- --recover-lock` only recovers a provably dead local owner;
-it does not start another run. No scheduler is installed.
+```bash
+# Production-capable: fetch X/Web and use AI; builds only a private candidate.
+npm run daily
 
-### Run and state contract
+# Local fixture smoke test: no ingest or AI, no edition candidate.
+npm run daily -- --self-test
 
-Runtime data is ignored by Git:
+# Explicitly recover a provably dead local owner; does not start another run.
+npm run daily -- --recover-lock
+```
+
+Daily never publishes/promotes, replaces a known-good edition, or creates or
+modifies `current.json`. No scheduler or Reader is installed. Exit codes are
+`0` succeeded, `2` succeeded_degraded, `1` failed/interrupted/lock refusal/invalid
+execution. The default command is now production-capable; tests inject local
+fetch and AI implementations instead of executing it against live services.
+
+### Order and isolated paths
+
+`ingest:x` (including freshness gate) → `ingest:web` → `unify` → `cluster` →
+`semantic` (AI) → `evaluate` (AI) → `select` → `digest` (AI) → `references` →
+`references:select` → `validate-edition`.
+
+References reads Unified Pool independently of Digest. Execution is serial and
+stops at the first required failure. Existing core pipeline modules, prompts,
+scoring and editorial rules are reused unchanged. Daily does not invoke their
+CLI defaults. Every output path is explicit and lies beneath the run's `work/`:
 
 ```text
 data/daily/
@@ -557,71 +574,135 @@ data/daily/
   runs/<UTC runId>/
     run.json
     work/
+      raw/                 # X JSON and per-source Web XML
+      normalized/          # x-news, web-news, news-pool
+      processed/           # stage outputs and reviews
+      cache/               # private AI caches
+      provenance/          # x.json and web.json retrieval evidence
+      edition/
+        manifest.json
+        news-digest.json
+        news-digest.md
+        references.json
 ```
 
-Run IDs use `YYYYMMDDTHHmmssZ` (for example `20260921T081500Z`). The programmatic
-`runDaily({ now, root, stages, config, signal })` interface accepts a fixed clock
-and temporary root for deterministic tests. A same-second collision fails
-without overwriting history; retry with a later timestamp.
+All Daily runtime data is gitignored. Run IDs use `YYYYMMDDTHHmmssZ`; a
+same-second collision fails without overwriting the previous run. Tests inject
+a temporary root and fixed clock into `runProductionDaily`/`runDaily`. Deadlines
+use elapsed monotonic time independently of the injected timestamp clock.
 
-`run.json` schemaVersion 1 records `runId`, `mode: "foundation"`, `startedAt`,
-`finishedAt`, `status`, `retainUntil`, `stages`, and `summary.failed/degraded`
-(stage IDs). Each stage records its ID, status, start/end timestamps and a fixed,
-concise diagnostic code. Arbitrary worker output/errors, secrets, environment,
-and stacks are not saved. Updates use same-directory temporary files and atomic
-rename. History consists of these run directories. Retention days determine
-`retainUntil`; automatic deletion is deferred, so history is not pruned yet.
+### X and Web freshness
 
-Run states support `running`, `publishing`, `succeeded`, `succeeded_degraded`,
-`failed`, and `interrupted`. Phase 1 does not enter `publishing`. Stage states
-support `pending`, `running`, `succeeded`, `degraded`, `failed`, and `skipped`.
-A failed stage stops execution and remaining stages are explicitly skipped.
-Terminal states cannot be restarted or changed to success.
+X requires successful retrieval **during this run**, existing feed schema,
+source and item-count validation, and a timezone-qualified, real-calendar
+`collectionCompletedAt`. At assessment, its age must be between −5 minutes and
+36 hours, inclusive. Missing/null provenance is unverified and fails. Empty X
+is allowed if the same gates pass. `generatedAt` is export metadata only: it
+must be a valid zoned timestamp, no more than 5 minutes earlier than collection,
+and no more than 5 minutes in the future. It never substitutes for collection
+provenance. The collection age is checked again before candidate validation.
 
-### Worker adapter contract
+At least one configured Web source must be retrieved and parsed successfully
+in this run. Individual failures degrade the run; all-source failure fails it.
+Feed-level `sourceGeneratedAt` older than 7 days produces an explicit degradation.
+Missing feed dates do not invalidate a successful retrieval. Canonical data is
+never used as a fallback for failed X/Web fetches.
 
-The programmatic stage descriptor is
-`{ id, moduleUrl, inputs, outputs, skip }`. `moduleUrl` is a trusted local ES
-module exporting an async default function; `inputs`/`outputs` map names to
-paths relative to this run's `work/`. The adapter receives absolute resolved
-`inputs`/`outputs`, `runId`, `workDir`, `workPath(relative)` and
-`writeJson(relative, value)`. Declared paths and helpers reject traversal,
-absolute paths, and existing symlinks. Adapters must pass these explicit paths
-to pipeline modules rather than use their canonical CLI defaults. Each adapter
-returns `{ status: "succeeded" | "degraded" | "failed" | "skipped" }`.
-A descriptor with `skip: true` is skipped before starting a worker.
+`config/daily.json` retains the Phase 1 keys: `freshness.x.maxAgeHours` (36),
+`freshness.x.futureToleranceMinutes` (5), and
+`freshness.web.oldMetadataDiagnosticDays` (7). `freshness.x.field` is fixed to
+`collectionCompletedAt`. `fetch.timeoutMs` (30 seconds) covers headers and body;
+requests use AbortSignal and perform no retries. The worker deadline provides
+an additional termination boundary. Injected fetch implementations must honor
+AbortSignal just as native fetch does. HTTP, timeout, malformed response and
+source errors have distinct fixed diagnostic codes.
 
-Workers have an empty environment and their stdout/stderr are drained without
-retention. Completion requires both a valid result and a clean worker exit;
-a premature success result cannot hide lingering work or a nonzero exit.
-Per-stage and remaining whole-run deadlines use elapsed monotonic time,
-independent of the injected timestamp clock. Expiry terminates the worker and
-waits for exit before recording failure or releasing the lock. No automatic
-retry is added. SIGINT/SIGTERM abort the active CLI worker and record interrupted
-state. An unhandled crash/SIGKILL can leave the owned lock and running history
-for explicit recovery.
+### Required/degradable policy and AI
 
-Worker termination and scoped paths are an orchestration boundary, **not an OS
-filesystem/security sandbox**. Only trusted adapters are supported; they must
-not spawn detached child work, write outside the provided paths, or introduce
-symlink races. Production adapters are deferred to Phase 2.
+All stages are required to complete. Only Web partial failure/old metadata,
+Digest per-item fallback, and empty References may return degraded status.
+Empty References is a valid output, with `references_empty` recorded. Missing
+or invalid Digest/References documents are required failures. A completely
+empty combined pool remains subject to the existing evaluation/digest nonempty
+input contracts; Daily does not change those semantics.
 
-### Lock and policy
+Semantic, Evaluate and Digest explicitly use `applyAi: true`, with no request
+count limit. Semantic requires every candidate judgment to complete; Evaluate
+requires every cluster to be evaluated. Valid existing cache hits count as AI
+success. Digest retains its existing per-item fallback and exit policy: partial
+failures with a valid document degrade; an existing total-failure exit fails
+the stage (including all newly attempted requests failing). Prompts and scores
+are unchanged.
 
-Exclusive directory creation acquires the single Daily lock. Owner metadata
-contains a random token, PID, hostname, run ID and acquisition time. Only the
-matching token can release the lock. Age never authorizes takeover. Explicit
-recovery requires a valid local owner with `kill(pid, 0)` reporting `ESRCH`;
-live PIDs, reused PIDs, remote hosts, permission errors, missing/corrupt metadata,
-and incomplete competing recovery are refused. A recovered nonterminal run is
-marked interrupted before removing the lock. Uncertain cases require manual
-operator investigation; there is no force flag.
+The parent loads root `.env` without overwriting existing environment values.
+Only AI workers receive `OPENAI_API_KEY`, `OPENAI_MODEL`, `SEMANTIC_MODEL`,
+`EVALUATION_MODEL`, and `DIGEST_MODEL`. Other workers have an empty environment.
+Credentials never enter worker context, run state, manifest, or diagnostic
+payloads. Worker stdout/stderr are drained without logging. AI exception details
+are replaced by a fixed diagnostic before core pipeline error handling.
 
-`config/daily.json` defines default/per-stage deadlines, whole-run deadline,
-and history retention. Freshness policy fields are reserved for later phases:
-X uses verified `collectionCompletedAt` (36 hours, 5 minutes future tolerance);
-null means unverified. `generatedAt` is export metadata only. Web old metadata
-has a 7-day diagnostic threshold. Phase 1 performs no fetch or freshness
-inference. Pipeline wiring, AI environment forwarding, bounded fetch, policy
-classification, last-known-good promotion and publication remain Phase 2 work.
-Existing standalone pipeline commands and editorial algorithms are unchanged.
+Each AI stage seeds a **private run-local cache** from successful canonical
+cache entries through the existing loader, projecting known cache fields.
+Existing cache matching/validation still decides reuse. Writes affect only the
+private cache; Phase 2 never merges cache mutations back. Cache reuse cannot
+replace same-run retrieval/freshness evidence. Existing AI client retry behavior
+is unchanged, bounded externally by stage and whole-run deadlines.
+
+### Run state, deadlines and locking
+
+`run.json` schemaVersion 1 records identity, `mode` (`foundation` or `candidate`),
+start/end times, status, `retainUntil`, stages and failure/degradation summaries.
+Stage records contain timestamps, fixed diagnostic codes, and relative output
+paths with SHA-256 hashes captured by the parent after clean worker exit.
+Updates use a same-directory temporary file and atomic rename.
+
+Run states are `running`, `publishing`, `succeeded`, `succeeded_degraded`,
+`failed`, `interrupted`; Phase 2 does not enter `publishing`. Stage states are
+`pending`, `running`, `succeeded`, `degraded`, `failed`, `skipped`. Required
+failure skips downstream stages. Retention days set `retainUntil`; automatic
+pruning remains deferred.
+
+Workers must return a valid result and exit cleanly. A success message cannot
+hide lingering work or a nonzero exit. Per-stage/whole-run deadlines terminate
+the worker and await its exit. SIGINT/SIGTERM abort the active worker, persist
+interrupted state and release the owned lock. A failed/interrupted candidate
+run removes its manifest marker. Abrupt termination may leave a lock/running
+history; explicit recovery marks it interrupted and removes its candidate
+marker. Phase 3 must always check terminal run state, never trust a manifest
+alone.
+
+Exclusive directory creation acquires the single lock. Owner metadata contains
+a random ownership token, PID, hostname, run ID and acquisition time. Only its
+token may release it. Age never authorizes takeover. `--recover-lock` requires
+a valid local owner with `kill(pid, 0)` reporting `ESRCH`. Live/reused PIDs,
+remote hosts, permission errors, missing/corrupt metadata or incomplete recovery
+are refused. No force flag is provided.
+
+Workers and scoped paths support **trusted adapters**, not arbitrary-code OS
+sandboxing. Paths reject traversal and existing/broken symlinks. Adapters must
+not spawn detached work or write outside supplied paths.
+
+### Edition candidate contract
+
+`edition/manifest.json` schemaVersion 1 is written last after validation. It
+contains `kind: "edition-candidate"`, `status: "validated"`, `runId`, `startedAt`,
+`editionDate` (run start in Asia/Tokyo), `createdAt`, X/Web retrieval provenance,
+completed stage records/hashes, Digest item count, References counts, explicit
+degradations, and hashes/relative paths for the three candidate output files.
+Candidate files are exact copies of the verified run-local stage output bytes;
+the manifest and stage receipts bind both products to one run without changing
+the existing Digest or References schemas. Digest's own date retains its
+existing generation-time semantics; the edition date comes from run start.
+
+Validation checks the required stage order and outcomes, recorded artifact
+hashes, same-run retrieval identities, X freshness again, Digest partition and
+unchanged selected fields, generated/fallback text contracts, exact Markdown
+rendering, References candidate/selection contracts and counts, candidate file
+hashes and run-local paths. Missing files, mismatched identity, invalid content,
+unrecorded degradation or stale X fail validation. Merely finding old files
+cannot mark success.
+
+For Phase 3: require successful terminal run state and its `validate-edition`
+artifact hashes, revalidate candidate hashes/freshness, then design atomic
+Digest+References promotion separately. Cache promotion, retention cleanup,
+scheduling and UI remain out of scope.

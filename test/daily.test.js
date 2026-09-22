@@ -179,19 +179,47 @@ test("daily uncertain and remote owner recovery refuses and preserves metadata",
 
 test("daily rejects missing stages and invalid execution policy before creating runtime data", async t => {
   const ctx = setup(t);
-  await assert.rejects(runDaily(ctx), /not wired/);
+  await assert.rejects(runDaily(ctx), /explicit stages/);
   ctx.config.execution.stageDeadlineMs = 0;
   assert.throws(() => validateConfig(ctx.config), /Invalid/);
   assert.equal(fs.existsSync(ctx.root), false);
 });
 
-test("daily default CLI clearly refuses incomplete production and runtime is gitignored", async () => {
+test("daily invalid CLI refuses execution and runtime is gitignored", async () => {
   let output = "";
-  const code = await runDailyCli([], { stderr: { write(s) { output += s; } } });
+  const code = await runDailyCli(["--unknown"], { stderr: { write(s) { output += s; } } });
   assert.equal(code, 1);
-  assert.match(output, /not wired/);
+  assert.match(output, /Usage/);
   const repo = fileURLToPath(new URL("../", import.meta.url));
   const ignored = spawnSync("git", ["check-ignore", "data/daily/lock/owner.json", `data/daily/runs/${id}/run.json`, `data/daily/runs/${id}/work/file.json`], { cwd: repo, encoding: "utf8" });
   assert.equal(ignored.status, 0);
   assert.equal(ignored.stdout.trim().split('\n').length, 3);
+});
+
+test("candidate worker timeout removes a prematurely written manifest", async t => {
+  const ctx = setup(t);
+  ctx.config.execution.stageDeadlineMs = 500;
+  const stage = adapter(ctx, "premature", `ctx.writeJson('edition/manifest.json', {status:'validated'}); setInterval(()=>{},1000); return {status:'succeeded'};`);
+  const result = await runDaily({ ...ctx, mode: "candidate", stages: [stage] });
+  assert.equal(result.state.status, "failed");
+  assert.equal(fs.existsSync(path.join(result.workDir, "edition/manifest.json")), false);
+});
+
+test("recovery invalidates an interrupted candidate manifest", t => {
+  const ctx = setup(t);
+  const child = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+  assert.equal(child.status, 0);
+  const lease = acquireLock(ctx.root, id, now);
+  const ownerFile = path.join(lease.lock, "owner.json");
+  const owner = JSON.parse(fs.readFileSync(ownerFile)); owner.pid = child.pid;
+  fs.writeFileSync(ownerFile, JSON.stringify(owner));
+  const runDir = path.join(ctx.root, "runs", id);
+  fs.mkdirSync(path.join(runDir, "work/edition"), { recursive: true });
+  const state = createState(id, at, ["pending"], 30); state.mode = "candidate";
+  writeState(path.join(runDir, "run.json"), state);
+  const marker = path.join(runDir, "work/edition/manifest.json");
+  fs.writeFileSync(marker, '{"status":"validated"}');
+  recoverLock(ctx.root, { now });
+  assert.equal(readState(ctx).status, "interrupted");
+  assert.equal(fs.existsSync(marker), false);
 });

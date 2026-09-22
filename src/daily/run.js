@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { createHash } from "node:crypto";
+import { DAILY_DIAGNOSTICS, FILES } from "./contract.js";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import { acquireLock, releaseLock } from "./lock.js";
@@ -18,11 +20,11 @@ export function validateConfig(config) {
   return config;
 }
 
-export function executeStage({ moduleUrl, context, deadlineMs, deadlineCode = "stage_deadline", signal }) {
+export function executeStage({ moduleUrl, context, deadlineMs, deadlineCode = "stage_deadline", signal, env = {} }) {
   return new Promise(resolve => {
     let message, diagnostic, stopping = false;
     const worker = new Worker(new URL("./stage-worker.js", import.meta.url), {
-      workerData: { moduleUrl, context }, env: {}, stdout: true, stderr: true,
+      workerData: { moduleUrl, context }, env, stdout: true, stderr: true,
     });
     // Drain without retaining arbitrary output (which may contain secrets).
     worker.stdout.resume();
@@ -48,18 +50,26 @@ export function executeStage({ moduleUrl, context, deadlineMs, deadlineCode = "s
       signal?.removeEventListener("abort", abort);
       if (diagnostic || code !== 0) return resolve({ status: "failed", diagnostic: diagnostic ?? "worker_exit" });
       if (!["succeeded", "degraded", "failed", "skipped"].includes(message?.status)) return resolve({ status: "failed", diagnostic: "invalid_result" });
-      resolve({ status: message.status, diagnostic: { failed: "stage_failed", degraded: "stage_degraded", skipped: "stage_skipped" }[message.status] ?? null });
+      const codes = message.diagnostics ?? [];
+      if (!Array.isArray(codes) || codes.some(code => !DAILY_DIAGNOSTICS.has(code))) return resolve({ status: "failed", diagnostic: "invalid_result" });
+      resolve({ status: message.status, diagnostics: [...new Set(codes)], diagnostic: { failed: "stage_failed", degraded: "stage_degraded", skipped: "stage_skipped" }[message.status] ?? null });
     });
   });
 }
 
 /** Trusted module adapters receive explicit run-local inputs/outputs, never CLI defaults.
- * No retry, publication, freshness decision or production pipeline is wired here.
+ * Worker environments and stage provenance are explicit; no publication occurs here.
  */
+const systemNow = () => new Date();
+export function aiEnvironment(env) {
+  const names = ["OPENAI_API_KEY", "OPENAI_MODEL", "SEMANTIC_MODEL", "EVALUATION_MODEL", "DIGEST_MODEL"];
+  return Object.fromEntries(names.filter(name => typeof env[name] === "string").map(name => [name, env[name]]));
+}
+
 export async function runDaily({ root = fileURLToPath(new URL("../../data/daily", import.meta.url)), stages,
-  config = loadDailyConfig(), now = () => new Date(), signal } = {}) {
+  config = loadDailyConfig(), now = systemNow, signal, mode = "foundation", workerEnv = {} } = {}) {
   validateConfig(config);
-  if (!Array.isArray(stages) || !stages.length) throw new Error("Production Daily pipeline is not wired; supply explicit foundation stages");
+  if (!Array.isArray(stages) || !stages.length) throw new Error("Daily foundation requires explicit stages; use runProductionDaily for candidate execution");
   const ids = stages.map(s => s.id);
   if (ids.some(id => typeof id !== "string" || !/^[a-z][a-z0-9:_-]*$/.test(id)) || new Set(ids).size !== ids.length) throw new Error("Invalid stage identities");
   for (const stage of stages) {
@@ -72,9 +82,12 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
   const workDir = path.join(runDir, "work");
   const file = path.join(runDir, "run.json");
   const state = createState(runId, startedAt, ids, config.retention.historyDays);
+  if (!["foundation", "candidate"].includes(mode)) throw new Error("Invalid Daily mode");
+  state.mode = mode;
   const lease = acquireLock(root, runId, now);
   const start = performance.now();
   let initialized = false;
+  let completed = false;
   const save = () => writeState(file, state);
   try {
     fs.mkdirSync(path.join(root, "runs"), { recursive: true });
@@ -99,12 +112,26 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
       save();
       const paths = entries => Object.fromEntries(Object.entries(entries ?? {}).map(([key, relative]) => [key, workPath(workDir, relative)]));
       const limit = Object.hasOwn(config.execution.stageDeadlinesMs, stage.id) ? config.execution.stageDeadlinesMs[stage.id] : config.execution.stageDeadlineMs;
-      const result = await executeStage({ moduleUrl: stage.moduleUrl,
-        context: { runId, workDir, inputs: paths(stage.inputs), outputs: paths(stage.outputs) },
+      let result = await executeStage({ moduleUrl: stage.moduleUrl,
+        context: { runId, workDir, inputs: paths(stage.inputs), outputs: paths(stage.outputs),
+          stageId: stage.id, startedAt, config, stages: state.stages,
+          clock: { at: timestamp(now), fixed: now !== systemNow } },
+        env: stage.ai ? aiEnvironment(workerEnv) : {},
         deadlineMs: Math.max(1, Math.min(limit, remaining)),
         deadlineCode: remaining <= limit ? "run_deadline" : "stage_deadline", signal });
+      let artifacts;
+      if (["succeeded", "degraded"].includes(result.status) && stage.outputs) {
+        try {
+          artifacts = Object.values(stage.outputs).map(relative => ({
+            path: relative, sha256: createHash("sha256").update(fs.readFileSync(workPath(workDir, relative))).digest("hex"),
+          }));
+        } catch { result = { status: "failed", diagnostic: "invalid_result", diagnostics: [] }; }
+      }
       // An adapter may discover it has no work after starting.
       transitionStage(state, stage.id, result.status, timestamp(now), result.diagnostic);
+      const record = state.stages.find(s => s.id === stage.id);
+      record.diagnostics = result.diagnostics ?? [];
+      if (artifacts) record.artifacts = artifacts;
       save();
       if (result.status === "failed") break;
     }
@@ -115,6 +142,7 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
     }
     transitionRun(state, interrupted ? "interrupted" : failed ? "failed" : state.summary.degraded.length ? "succeeded_degraded" : "succeeded", timestamp(now));
     save();
+    completed = ["succeeded", "succeeded_degraded"].includes(state.status);
     return { state, runDir, workDir };
   } catch (error) {
     if (initialized && state.status === "running") {
@@ -126,5 +154,12 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
       save();
     }
     throw error;
-  } finally { releaseLock(lease); }
+  } finally {
+    try {
+      if (initialized && mode === "candidate" && !completed) {
+        // A worker may have been interrupted after writing its manifest.
+        fs.rmSync(workPath(workDir, FILES.manifest), { force: true });
+      }
+    } finally { releaseLock(lease); }
+  }
 }
