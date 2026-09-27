@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
+import { readCurrentPublication } from "./edition.js";
 import { FILES } from "./contract.js";
-import { timestamp, transitionRun, transitionStage, workPath, writeState } from "./state.js";
+import { timestamp, transitionRun, transitionStage, workPath, writeState, recordCommittedPublication } from "./state.js";
 
 function ownerAt(lock) {
   return JSON.parse(fs.readFileSync(path.join(lock, "owner.json"), "utf8"));
@@ -23,6 +24,12 @@ export function acquireLock(root, runId, now) {
   return { lock, token: owner.token };
 }
 
+export function assertOwnedLock(lease, root, runId) {
+  if (!lease || path.resolve(lease.lock) !== path.resolve(root, "lock")) throw new Error("Daily lock required");
+  const owner = ownerAt(lease.lock);
+  if (owner.token !== lease.token || owner.pid !== process.pid || owner.hostname !== os.hostname() || owner.runId !== runId) throw new Error("Daily lock ownership changed");
+}
+
 export function releaseLock({ lock, token }) {
   if (ownerAt(lock).token !== token) throw new Error("Daily lock ownership changed; refusing release");
   fs.unlinkSync(path.join(lock, "owner.json"));
@@ -31,6 +38,19 @@ export function releaseLock({ lock, token }) {
 
 export function recoverLock(root, { now, probe = pid => process.kill(pid, 0) } = {}) {
   const lock = path.join(root, "lock");
+  if (!fs.existsSync(lock)) {
+    const current = readCurrentPublication(root);
+    if (!current) throw new Error("No Daily lock or committed publication to recover");
+    const lease = acquireLock(root, current.pointer.runId, now);
+    try {
+      const verified = readCurrentPublication(root);
+      const file = workPath(root, `runs/${verified.pointer.runId}/run.json`);
+      const state = JSON.parse(fs.readFileSync(file, "utf8"));
+      recordCommittedPublication(state, verified);
+      writeState(file, state);
+      return { publication: "committed", reconciled: true };
+    } finally { releaseLock(lease); }
+  }
   // Refuse live/uncertain owners before claiming recovery, so a live runner's
   // normal release never races a recovery marker.
   function requireDead(owner) {
@@ -47,11 +67,15 @@ export function recoverLock(root, { now, probe = pid => process.kill(pid, 0) } =
     const owner = ownerAt(lock);
     requireDead(owner);
     if (ownerAt(lock).token !== owner.token) throw new Error("Lock changed during recovery");
-    const file = path.join(root, "runs", owner.runId, "run.json");
+    const current = readCurrentPublication(root);
+    const file = workPath(root, `runs/${owner.runId}/run.json`);
     if (fs.existsSync(file)) {
       const state = JSON.parse(fs.readFileSync(file, "utf8"));
       if (state.runId !== owner.runId) throw new Error("Run identity mismatch; recovery refused");
-      if (["running", "publishing"].includes(state.status)) {
+      if (current?.pointer.runId === owner.runId) {
+        recordCommittedPublication(state, current);
+        writeState(file, state);
+      } else if (["running", "publishing"].includes(state.status)) {
         const at = timestamp(now);
         for (const stage of state.stages) {
           if (stage.status === "running") transitionStage(state, stage.id, "failed", at, "interrupted");
@@ -59,7 +83,7 @@ export function recoverLock(root, { now, probe = pid => process.kill(pid, 0) } =
         }
         transitionRun(state, "interrupted", at);
         writeState(file, state);
-        if (state.mode === "candidate") fs.rmSync(workPath(path.join(root, "runs", owner.runId, "work"), FILES.manifest), { force: true });
+        if (["candidate", "production"].includes(state.mode)) fs.rmSync(workPath(path.join(root, "runs", owner.runId, "work"), FILES.manifest), { force: true });
       }
     }
     fs.unlinkSync(path.join(lock, "owner.json"));

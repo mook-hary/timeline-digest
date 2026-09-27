@@ -26,3 +26,7 @@ export const DAILY_DIAGNOSTICS = new Set([
   "web_all_failed", "web_source_failed", "web_metadata_old", "semantic_incomplete", "evaluation_incomplete",
   "digest_fallback", "digest_failed", "references_empty", "edition_invalid", "ai_credentials_missing", "pipeline_failed",
 ]);
+
+// Immutable editions preserve the Phase 2 candidate bytes, including its fixed
+// work-relative edition/ paths. Resolve those descriptors to these basenames.
+export const EDITION_FILES = ["manifest.json", "news-digest.json", "news-digest.md", "references.json"];

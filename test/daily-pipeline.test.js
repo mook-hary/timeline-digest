@@ -37,7 +37,7 @@ function setup(t, edit = () => {}) {
   const value = scenario(); edit(value);
   fs.writeFileSync(path.join(root, "fixture.json"), JSON.stringify(value));
   const config = loadDailyConfig(); config.fetch.timeoutMs = 100;
-  return { root, dir, config, now: () => NOW, moduleUrl };
+  return { root, dir, config, now: () => NOW, moduleUrl, promote: false };
 }
 function read(result, key) { return JSON.parse(fs.readFileSync(path.join(result.workDir, FILES[key]), "utf8")); }
 function ctx(result, config) { return { runId: result.state.runId, startedAt: result.state.startedAt, workDir: result.workDir, stages: result.state.stages, config }; }
@@ -218,8 +218,8 @@ test("CLI dispatch and exit codes are tested only with injected local runner", a
       productionRunner: async options => { assert.equal(options.root, env.root); return { state: { status, runId: "fixture" } }; } });
     assert.equal(code, expected);
   }
-  assert.match(output, /candidate only/);
-  assert.match(output, /no promotion/);
+  assert.match(output, /Daily:/);
+  assert.match(output, /publication/);
   const other = setup(t); fs.unlinkSync(path.join(other.root, "current.json"));
   const result = await runProductionDaily(other);
   assert.equal(result.state.status, "succeeded", JSON.stringify(result.state.stages));

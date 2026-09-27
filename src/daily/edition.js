@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
+import syncFs from "node:fs";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { FILES, STAGE_ORDER, OUTPUT_KEYS, DEGRADABLE, DAILY_DIAGNOSTICS } from "./contract.js";
+import { FILES, STAGE_ORDER, OUTPUT_KEYS, DEGRADABLE, DAILY_DIAGNOSTICS, EDITION_FILES } from "./contract.js";
 import { workPath } from "./state.js";
 import { DailyError } from "./fetch.js";
 import { assessXFreshness, parseTimestamp } from "./freshness.js";
@@ -145,4 +146,88 @@ export async function createEditionCandidate(ctx, { now }) {
   // Final marker only after content, provenance, freshness and hashes validate.
   await writeJsonAtomic(workPath(ctx.workDir, FILES.manifest), manifest);
   return manifest;
+}
+
+/** Verify a self-contained immutable edition without consulting run.json, old
+ * work files, current config, or current input freshness. Old known-good
+ * editions remain valid publication records even after their input ages out.
+ */
+export function readImmutableEdition(directory, expectedBytes) {
+  try {
+    requireValue(isDeepStrictEqual(syncFs.readdirSync(directory).sort(), [...EDITION_FILES].sort()));
+    const bytes = Object.fromEntries(EDITION_FILES.map(name => {
+      const file = workPath(directory, name);
+      requireValue(syncFs.lstatSync(file).isFile());
+      return [name, syncFs.readFileSync(file)];
+    }));
+    if (expectedBytes) for (const name of EDITION_FILES) requireValue(bytes[name].equals(expectedBytes[name]));
+    const manifest = JSON.parse(bytes["manifest.json"]);
+    requireValue(manifest.schemaVersion === 1 && manifest.kind === "edition-candidate" && manifest.status === "validated");
+    requireValue(/^\d{8}T\d{6}Z$/.test(manifest.runId));
+    parseTimestamp(manifest.startedAt); parseTimestamp(manifest.createdAt);
+    requireValue(manifest.editionDate === digestDateOf(manifest.startedAt));
+    requireValue(isDeepStrictEqual(manifest.stages.map(s => s.id), STAGE_ORDER.slice(0, -1)));
+    for (const stage of manifest.stages) {
+      requireValue(stage.status === "succeeded" || (stage.status === "degraded" && DEGRADABLE.has(stage.id)));
+      requireValue(Array.isArray(stage.diagnostics) && stage.diagnostics.every(code => DAILY_DIAGNOSTICS.has(code)));
+      requireValue(stage.status === "degraded" ? stage.diagnostics.length > 0 : stage.diagnostics.length === 0);
+    }
+    requireValue(isDeepStrictEqual(manifest.degradedDiagnostics, manifest.stages.filter(s => s.status === "degraded").map(s => ({ stage: s.id, codes: s.diagnostics }))));
+    requireValue(manifest.inputs.x.runId === manifest.runId && manifest.inputs.x.status === "succeeded" && manifest.inputs.web.runId === manifest.runId);
+    parseTimestamp(manifest.inputs.x.collectionCompletedAt); parseTimestamp(manifest.inputs.x.generatedAt);
+    requireValue(isDeepStrictEqual(Object.keys(manifest.files).sort(), ["digest", "markdown", "references"]));
+    for (const [key, name] of Object.entries({ digest: "news-digest.json", markdown: "news-digest.md", references: "references.json" })) {
+      requireValue(manifest.files[key].path === `edition/${name}` && manifest.files[key].sha256 === hashBytes(bytes[name]));
+    }
+    const digest = JSON.parse(bytes["news-digest.json"]), references = JSON.parse(bytes["references.json"]);
+    requireValue(digest.schemaVersion === 1 && Array.isArray(digest.items) && digest.items.length === manifest.digestItemCount);
+    requireValue(digest.stats.applyAi === true && digest.stats.dryRun === false && digest.stats.inputSelected === digest.items.length);
+    const counts = countDigestStatuses(digest.items);
+    for (const [status, count] of Object.entries(counts)) requireValue(digest.stats[status] === count);
+    requireValue(renderDigestMarkdown(digest) === bytes["news-digest.md"].toString("utf8"));
+    requireValue(references.schemaVersion === 1 && isDeepStrictEqual(references.stats, manifest.referencesCounts));
+    // Reuse the existing item/selection validators with a non-persisted shape
+    // envelope; no historic pool file is required just to resolve a pointer.
+    const candidateShape = { schemaVersion: 1, generatedAt: references.sourceCandidates.generatedAt,
+      sourcePool: { generatedAt: references.sourceCandidates.generatedAt, itemCount: references.items.length },
+      threshold: references.sourceCandidates.threshold, candidateCount: references.items.length,
+      items: references.items.map(({ selection, ...item }) => item) };
+    requireValue(isDeepStrictEqual(references, buildReferencesSelection(candidateShape, {
+      schemaVersion: 1, policyId: references.selectionPolicy.id, primaryMinValue: references.selectionPolicy.primaryMinValue,
+    }, { generatedAt: references.generatedAt, sourceCandidatesPath: FILES.candidates })));
+    return { manifest, bytes, manifestSha256: hashBytes(bytes["manifest.json"]) };
+  } catch (error) {
+    throw new DailyError(error.code === "ENOENT" ? "edition_missing" : "edition_invalid");
+  }
+}
+
+export function parseCurrentPointer(bytes) {
+  let pointer;
+  try { pointer = JSON.parse(bytes); } catch { throw new DailyError("current_invalid"); }
+  if (!pointer || pointer.schemaVersion !== 1 || !/^\d{8}T\d{6}Z$/.test(pointer.runId) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(pointer.editionDate) || !/^[a-f0-9]{64}$/.test(pointer.manifestSha256) ||
+      !isDeepStrictEqual(Object.keys(pointer).sort(), ["schemaVersion", "runId", "editionDate", "promotedAt", "edition", "manifestSha256"].sort())) throw new DailyError("current_invalid");
+  if (pointer.edition !== `editions/${pointer.runId}`) throw new DailyError("current_path_invalid");
+  try { parseTimestamp(pointer.promotedAt); } catch { throw new DailyError("current_invalid"); }
+  return pointer;
+}
+
+// Optional filename is only for verifying this operation's temporary pointer.
+export function readCurrentPublication(root, filename = "current.json") {
+  let bytes;
+  try {
+    const file = workPath(root, filename);
+    if (!syncFs.lstatSync(file).isFile()) throw new DailyError("current_invalid");
+    bytes = syncFs.readFileSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new DailyError("current_invalid");
+  }
+  const pointer = parseCurrentPointer(bytes);
+  let edition;
+  try { edition = readImmutableEdition(workPath(root, pointer.edition)); }
+  catch (error) { throw new DailyError(error.code === "edition_missing" ? "current_edition_missing" : "current_edition_invalid"); }
+  if (pointer.manifestSha256 !== edition.manifestSha256) throw new DailyError("current_manifest_mismatch");
+  if (pointer.runId !== edition.manifest.runId || pointer.editionDate !== edition.manifest.editionDate) throw new DailyError("current_identity_mismatch");
+  return { pointer, manifest: edition.manifest, bytes, editionBytes: edition.bytes };
 }

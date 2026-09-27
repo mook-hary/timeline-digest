@@ -538,24 +538,27 @@ src/sources/astronomy.js    # 未実装
 
 Unify / deterministic Cluster / Semantic / Evaluation / Editorial Select / Digest Generation まで実装済みです。Publish（Web UI / GitHub Pages 等）はまだです。
 
-## Daily runner (Phase 2: candidate only)
+## Daily runner (Phase 3: atomic edition promotion)
 
 ```bash
-# Production-capable: fetch X/Web and use AI; builds only a private candidate.
+# Production: fetch X/Web, use AI, validate and atomically promote an edition.
 npm run daily
 
 # Local fixture smoke test: no ingest or AI, no edition candidate.
 npm run daily -- --self-test
 
-# Explicitly recover a provably dead local owner; does not start another run.
+# Recover a provably dead local owner or reconcile committed bookkeeping; no pipeline.
 npm run daily -- --recover-lock
 ```
 
-Daily never publishes/promotes, replaces a known-good edition, or creates or
-modifies `current.json`. No scheduler or Reader is installed. Exit codes are
-`0` succeeded, `2` succeeded_degraded, `1` failed/interrupted/lock refusal/invalid
-execution. The default command is now production-capable; tests inject local
-fetch and AI implementations instead of executing it against live services.
+Daily validates a coherent edition before replacing `data/daily/current.json`.
+A required failure before that atomic replacement preserves the previous
+known-good pointer and edition. No scheduler or Reader is installed. Exit codes
+are `0` succeeded, `2` succeeded_degraded, `1` failed/interrupted/lock refusal/
+invalid execution. A committed publication with incomplete bookkeeping retains
+its success/degraded exit code and reports the pending recovery explicitly.
+Tests inject local fetch/AI implementations and temporary roots; they do not
+execute the command against live services.
 
 ### Order and isolated paths
 
@@ -566,11 +569,14 @@ fetch and AI implementations instead of executing it against live services.
 References reads Unified Pool independently of Digest. Execution is serial and
 stops at the first required failure. Existing core pipeline modules, prompts,
 scoring and editorial rules are reused unchanged. Daily does not invoke their
-CLI defaults. Every output path is explicit and lies beneath the run's `work/`:
+CLI defaults. Every pipeline output path is explicit and lies beneath the run's `work/`;
+only promotion writes the immutable editions and current pointer:
 
 ```text
 data/daily/
   lock/owner.json
+  current.json             # atomic publication pointer
+  editions/<UTC runId>/     # immutable: manifest + Digest JSON/Markdown + References
   runs/<UTC runId>/
     run.json
     work/
@@ -644,20 +650,22 @@ are replaced by a fixed diagnostic before core pipeline error handling.
 Each AI stage seeds a **private run-local cache** from successful canonical
 cache entries through the existing loader, projecting known cache fields.
 Existing cache matching/validation still decides reuse. Writes affect only the
-private cache; Phase 2 never merges cache mutations back. Cache reuse cannot
+private cache; Daily never merges cache mutations back. Cache reuse cannot
 replace same-run retrieval/freshness evidence. Existing AI client retry behavior
 is unchanged, bounded externally by stage and whole-run deadlines.
 
 ### Run state, deadlines and locking
 
-`run.json` schemaVersion 1 records identity, `mode` (`foundation` or `candidate`),
+`run.json` schemaVersion 1 records identity, `mode` (`foundation`, `candidate`, or
+`production`),
 start/end times, status, `retainUntil`, stages and failure/degradation summaries.
 Stage records contain timestamps, fixed diagnostic codes, and relative output
 paths with SHA-256 hashes captured by the parent after clean worker exit.
 Updates use a same-directory temporary file and atomic rename.
 
 Run states are `running`, `publishing`, `succeeded`, `succeeded_degraded`,
-`failed`, `interrupted`; Phase 2 does not enter `publishing`. Stage states are
+`failed`, `interrupted`. Production proceeds from validated candidate through
+`publishing` to terminal success only after pointer commit. Stage states are
 `pending`, `running`, `succeeded`, `degraded`, `failed`, `skipped`. Required
 failure skips downstream stages. Retention days set `retainUntil`; automatic
 pruning remains deferred.
@@ -667,16 +675,20 @@ hide lingering work or a nonzero exit. Per-stage/whole-run deadlines terminate
 the worker and await its exit. SIGINT/SIGTERM abort the active worker, persist
 interrupted state and release the owned lock. A failed/interrupted candidate
 run removes its manifest marker. Abrupt termination may leave a lock/running
-history; explicit recovery marks it interrupted and removes its candidate
-marker. Phase 3 must always check terminal run state, never trust a manifest
-alone.
+history. Explicit recovery first verifies publication truth: a pointer already
+committed to that run repairs its terminal state; otherwise the abandoned run
+is marked interrupted and its candidate marker removed. The pointer plus
+verified immutable edition, rather than an unfinished `run.json`, is the
+authority after publication.
 
 Exclusive directory creation acquires the single lock. Owner metadata contains
 a random ownership token, PID, hostname, run ID and acquisition time. Only its
 token may release it. Age never authorizes takeover. `--recover-lock` requires
 a valid local owner with `kill(pid, 0)` reporting `ESRCH`. Live/reused PIDs,
 remote hosts, permission errors, missing/corrupt metadata or incomplete recovery
-are refused. No force flag is provided.
+are refused. If there is no lock, `--recover-lock` can acquire one briefly and
+reconcile the current publication's run bookkeeping. No pipeline or pointer
+replacement occurs during recovery. No force flag is provided.
 
 Workers and scoped paths support **trusted adapters**, not arbitrary-code OS
 sandboxing. Paths reject traversal and existing/broken symlinks. Adapters must
@@ -702,7 +714,91 @@ hashes and run-local paths. Missing files, mismatched identity, invalid content,
 unrecorded degradation or stale X fail validation. Merely finding old files
 cannot mark success.
 
-For Phase 3: require successful terminal run state and its `validate-edition`
-artifact hashes, revalidate candidate hashes/freshness, then design atomic
-Digest+References promotion separately. Cache promotion, retention cleanup,
-scheduling and UI remain out of scope.
+### Immutable editions and current pointer
+
+Normal `npm run daily` now continues past candidate validation while holding the
+same Daily lock. The internal `runProductionDaily({ promote: false, ... })` mode
+retains candidate-only execution for tests. `promoteRun({ root, runId, config,
+now })` is an internal lock-acquiring promotion/reconciliation entry point;
+there is no new production CLI flag.
+
+Before materialization, promotion verifies all required stages, the successful
+`validate-edition` stage's four artifact hashes, the entire Phase 2 candidate
+contract, and current X collection freshness. It rejects failed/interrupted
+runs. This seals candidate bytes against changes after Phase 2 validation.
+Phase 2's terminal candidate success is allowed to progress explicitly into
+`publishing`; it is not mistaken for an already-published edition.
+
+A unique temporary directory under `editions/` receives exactly:
+
+```text
+manifest.json
+news-digest.json
+news-digest.md
+references.json
+```
+
+Copied bytes and contracts are verified before atomic directory rename to
+`editions/<runId>/`. An existing directory is never overwritten or edited. Only
+an exactly byte-equivalent edition may be reused, including its manifest. The
+manifest is preserved byte-for-byte from Phase 2: its fixed `edition/<filename>`
+descriptors are resolved to basenames inside the immutable edition directory.
+
+The versioned pointer is:
+
+```json
+{
+  "schemaVersion": 1,
+  "runId": "20260924T000000Z",
+  "editionDate": "2026-09-24",
+  "promotedAt": "2026-09-24T00:10:00.000Z",
+  "edition": "editions/20260924T000000Z",
+  "manifestSha256": "<64 lowercase hexadecimal characters>"
+}
+```
+
+Only the exact constrained relative edition path is accepted; traversal,
+absolute paths and symlinks are rejected. The manifest hash binds the pointer
+to all edition files. Resolving an existing known-good pointer needs only the
+immutable edition, not historic work files or today's freshness/config values.
+Malformed pointers, missing/invalid editions, and hash mismatches fail closed
+with fixed diagnostic codes; they are never silently replaced or repaired.
+
+Promotion writes and verifies a unique temporary pointer in `data/daily/`.
+Immediately before its rename, it rechecks lock ownership, cancellation/run
+deadline, the candidate seal, immutable bytes, the unchanged prior pointer, and
+X freshness using only `collectionCompletedAt`. **Atomic replacement of
+`current.json` is the sole publication commit point.** There is no asynchronous
+gap between these last checks and the synchronous rename in the parent process.
+
+### Failure, idempotency and reconciliation
+
+| Boundary | Result |
+| --- | --- |
+| Validation/materialization/temp-pointer failure | Old pointer unchanged; run failed; invocation-owned temporary files cleaned |
+| Edition renamed, pointer not committed | Complete unreferenced edition may remain; old pointer remains authoritative |
+| Pointer rename succeeds | New immutable edition is authoritative; previous edition is retained |
+| Failure after pointer rename/final state write | Publication remains committed; bookkeeping reported pending; no rollback |
+| Same run is already current | Verify immutable publication and reconcile state; no pointer rewrite or timestamp refresh |
+| Previously committed run is superseded | Reject retry as `publication_superseded`; never roll back a newer edition |
+
+`run.json.publication` separates `pending`, `not_committed` (with a fixed failure
+diagnostic), and `committed` (edition, manifest hash, promotedAt, bookkeeping).
+After a commit, recovery derives success/degraded status from the verified
+manifest and pointer. It never treats an aged-out candidate as a fresh new
+publication: already-current reconciliation does not republish or advance
+`promotedAt`. A failed/interrupted uncommitted run cannot be restarted via the
+promotion helper. A valid nonfailed candidate with an equivalent existing
+edition can reuse it safely.
+
+Handled post-commit bookkeeping failures can be reconciled using
+`npm run daily -- --recover-lock`. After a process crash leaving a lock, the
+same command first requires a provably dead local owner. Invalid publication
+truth or uncertain/live ownership requires operator investigation. Interrupted
+run state cannot override a valid committed pointer.
+
+Retention remains deferred to TD-OPS. Promotion deletes no final edition or
+historic run: current, previous, and recoverable editions remain intact.
+Handled failures clean only this invocation's unique temporaries; orphaned
+temporaries from an abrupt process crash remain for later conservative cleanup.
+TD-OPS also owns scheduling, notifications, retention and any cache promotion.

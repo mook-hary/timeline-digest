@@ -37,7 +37,7 @@ export function productionStages(moduleUrl = import.meta.url) {
 export async function runProductionDaily(options = {}) {
   const config = options.config ?? loadDailyConfig();
   validateFreshnessPolicy(config);
-  return runDaily({ ...options, config, mode: "candidate", stages: productionStages(options.moduleUrl) });
+  return runDaily({ ...options, config, mode: options.promote === false ? "candidate" : "production", stages: productionStages(options.moduleUrl) });
 }
 
 const safeAi = fn => async (...args) => {

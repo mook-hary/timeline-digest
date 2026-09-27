@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { DAILY_DIAGNOSTICS, FILES } from "./contract.js";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
+import { promoteWithLock } from "./promotion.js";
 import { acquireLock, releaseLock } from "./lock.js";
 import { createState, runIdAt, timestamp, transitionRun, transitionStage, workPath, writeState } from "./state.js";
 
@@ -58,7 +59,7 @@ export function executeStage({ moduleUrl, context, deadlineMs, deadlineCode = "s
 }
 
 /** Trusted module adapters receive explicit run-local inputs/outputs, never CLI defaults.
- * Worker environments and stage provenance are explicit; no publication occurs here.
+ * Worker environments and stage provenance are explicit; promotion runs in the lock-owning parent after candidate workers complete.
  */
 const systemNow = () => new Date();
 export function aiEnvironment(env) {
@@ -67,7 +68,7 @@ export function aiEnvironment(env) {
 }
 
 export async function runDaily({ root = fileURLToPath(new URL("../../data/daily", import.meta.url)), stages,
-  config = loadDailyConfig(), now = systemNow, signal, mode = "foundation", workerEnv = {} } = {}) {
+  config = loadDailyConfig(), now = systemNow, signal, mode = "foundation", workerEnv = {}, promotionOptions = {} } = {}) {
   validateConfig(config);
   if (!Array.isArray(stages) || !stages.length) throw new Error("Daily foundation requires explicit stages; use runProductionDaily for candidate execution");
   const ids = stages.map(s => s.id);
@@ -82,12 +83,13 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
   const workDir = path.join(runDir, "work");
   const file = path.join(runDir, "run.json");
   const state = createState(runId, startedAt, ids, config.retention.historyDays);
-  if (!["foundation", "candidate"].includes(mode)) throw new Error("Invalid Daily mode");
+  if (!["foundation", "candidate", "production"].includes(mode)) throw new Error("Invalid Daily mode");
   state.mode = mode;
   const lease = acquireLock(root, runId, now);
   const start = performance.now();
   let initialized = false;
   let completed = false;
+  let publication;
   const save = () => writeState(file, state);
   try {
     fs.mkdirSync(path.join(root, "runs"), { recursive: true });
@@ -140,6 +142,14 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
     if (failed) {
       for (const stage of state.stages.filter(s => s.status === "pending")) transitionStage(state, stage.id, "skipped", timestamp(now), interrupted ? "interrupted" : "upstream_failed");
     }
+    if (!failed && mode === "production") {
+      publication = await promoteWithLock({ ...promotionOptions, root, state, config, lease, now, signal,
+        assertWithinDeadline() {
+          if (performance.now() - start >= config.execution.runDeadlineMs) throw Object.assign(new Error("promotion_deadline"), { code: "promotion_deadline" });
+        } });
+      completed = publication.committed;
+      return { state, runDir, workDir, publication };
+    }
     transitionRun(state, interrupted ? "interrupted" : failed ? "failed" : state.summary.degraded.length ? "succeeded_degraded" : "succeeded", timestamp(now));
     save();
     completed = ["succeeded", "succeeded_degraded"].includes(state.status);
@@ -156,10 +166,18 @@ export async function runDaily({ root = fileURLToPath(new URL("../../data/daily"
     throw error;
   } finally {
     try {
-      if (initialized && mode === "candidate" && !completed) {
+      if (initialized && ["candidate", "production"].includes(mode) && !completed) {
         // A worker may have been interrupted after writing its manifest.
         fs.rmSync(workPath(workDir, FILES.manifest), { force: true });
       }
-    } finally { releaseLock(lease); }
+    } finally {
+      try { releaseLock(lease); }
+      catch (error) {
+        if (!publication?.committed) throw error;
+        publication.bookkeeping = "pending";
+        publication.diagnostic = "publication_lock_release_pending";
+        state.publication.bookkeeping = "pending";
+      }
+    }
   }
 }

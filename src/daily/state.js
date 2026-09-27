@@ -79,3 +79,30 @@ export function workPath(workDir, relative) {
   }
   return resolved;
 }
+
+// Phase 2 terminal success meant "candidate ready", not "published". Allow that
+// one explicit progression without allowing a failed/interrupted run to restart.
+export function beginPublishing(state) {
+  if (!["candidate", "production"].includes(state.mode) ||
+      !["running", "publishing", "succeeded", "succeeded_degraded"].includes(state.status) ||
+      state.summary.failed.length || state.stages.some(s => !["succeeded", "degraded"].includes(s.status))) {
+    throw new Error("promotion_run_ineligible");
+  }
+  state.mode = "production";
+  state.status = "publishing";
+  state.finishedAt = null;
+  state.publication = { status: "pending" };
+}
+
+// Call only with verified current.json + immutable bytes. Publication truth can
+// repair stale bookkeeping even if run.json incorrectly says failed/interrupted.
+export function recordCommittedPublication(state, { pointer, manifest }, bookkeeping = "succeeded") {
+  if (state.runId !== pointer.runId || manifest.runId !== pointer.runId) throw new Error("publication_identity_mismatch");
+  const degraded = manifest.degradedDiagnostics.map(entry => entry.stage);
+  state.mode = "production";
+  state.status = degraded.length ? "succeeded_degraded" : "succeeded";
+  state.finishedAt = pointer.promotedAt;
+  state.summary = { failed: [], degraded };
+  state.publication = { status: "committed", promotedAt: pointer.promotedAt,
+    edition: pointer.edition, manifestSha256: pointer.manifestSha256, bookkeeping };
+}
